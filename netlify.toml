@@ -1,0 +1,14 @@
+# Netlify: build the React app in client/ and serve it as a single-page app
+[build]
+  base = "client"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Clean URLs: send every path to the app so links like /sales/5 work on refresh
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

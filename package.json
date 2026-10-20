@@ -1,0 +1,15 @@
+{
+  "name": "vangy-wine-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Business management system for Vangy Wine Company Limited",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "setup": "npm --prefix client install",
+    "dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix client run preview"
+  }
+}

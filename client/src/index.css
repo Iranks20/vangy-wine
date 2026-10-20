@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display", Georgia, serif;
+
+  --color-wine-50: #fbf3f4;
+  --color-wine-100: #f5e1e4;
+  --color-wine-200: #e9bfc6;
+  --color-wine-500: #a33a52;
+  --color-wine-600: #8a2a3f;
+  --color-wine-700: #6b1d2f;
+  --color-wine-800: #561726;
+  --color-wine-900: #3d0f1a;
+
+  --color-gold-100: #f7ecd2;
+  --color-gold-300: #e6c77f;
+  --color-gold-400: #d4a64a;
+  --color-gold-500: #b8892f;
+
+  --color-ivory: #faf7f2;
+  --color-charcoal: #2a2726;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-ivory text-charcoal font-sans antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, select, textarea { font-size: 16px; } /* stops iOS zoom on focus */
+@media (min-width: 768px) { input, select, textarea { font-size: 14px; } }
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-charcoal outline-none
+           transition focus:border-wine-600 focus:ring-2 focus:ring-wine-100 disabled:bg-stone-100;
+  }
+}
+
+/* Printing: only the printable area is shown (receipts, reports) */
+@media print {
+  body { background: white; }
+  .no-print { display: none !important; }
+  .print-area { box-shadow: none !important; border: none !important; }
+}
