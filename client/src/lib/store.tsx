@@ -1,7 +1,7 @@
 // Demo data store. Stands in for the future backend API: every action applies the
 // same business rules the server will (stock checks, balances, audit trail).
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { buildDemoDb } from './mock';
+import { buildDemoDb, INVOICE_DEFAULTS } from './mock';
 import type {
   Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
 } from './types';
@@ -45,8 +45,22 @@ export function cashbook(db: Db): CashLine[] {
 // ---------- store ----------
 type NewSale = { salesperson: string; customerId?: number; customerName: string; customerPhone?: string; lines: Omit<SaleLine, 'cost' | 'name'>[]; paid: number; method: Method | 'credit'; delivery?: string; notes?: string; date: string };
 
+// Brings data saved by an older version up to the current shape.
+function upgrade(d: Db): Db {
+  d.settings = { ...INVOICE_DEFAULTS, ...d.settings };
+  const pays = d.sales.flatMap((s) => s.payments);
+  let n = pays.reduce((m, p) => Math.max(m, Number(p.receiptNo?.split('-')[2] ?? 0)), 0);
+  [...pays].sort((a, b) => a.date.localeCompare(b.date)).forEach((p) => { if (!p.receiptNo) p.receiptNo = `RCT-${p.date.slice(0, 4)}-${String(++n).padStart(5, '0')}`; });
+  return d;
+}
+
+const nextReceiptNo = (d: Db) => {
+  const n = d.sales.flatMap((s) => s.payments).reduce((m, p) => Math.max(m, Number(p.receiptNo?.split('-')[2] ?? 0)), 0);
+  return `RCT-${new Date().getFullYear()}-${String(n + 1).padStart(5, '0')}`;
+};
+
 function load(): Db {
-  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch { /* fall through */ }
+  try { const raw = localStorage.getItem(KEY); if (raw) return upgrade(JSON.parse(raw)); } catch { /* fall through */ }
   return buildDemoDb();
 }
 
@@ -124,7 +138,7 @@ function useStoreState() {
       const total = saleTotal(sale);
       if (input.paid > total) throw new Error('Amount paid cannot be more than the total.');
       if (input.paid < total && !input.customerId) throw new Error('Credit or part-payment needs a registered customer, so the debt can be tracked.');
-      if (input.paid > 0) sale.payments.push({ id: Date.now(), date: input.date, amount: input.paid, method: input.method === 'credit' ? 'cash' : input.method });
+      if (input.paid > 0) sale.payments.push({ id: Date.now(), date: input.date, amount: input.paid, method: input.method === 'credit' ? 'cash' : input.method, receiptNo: nextReceiptNo(d) });
       const cust = d.customers.find((c) => c.id === input.customerId);
       const due = new Date(input.date); due.setDate(due.getDate() + (cust?.terms ?? 0));
       sale.dueDate = due.toISOString().slice(0, 10);
@@ -136,8 +150,10 @@ function useStoreState() {
       const s = d.sales.find((x) => x.id === saleId)!;
       if (amount <= 0) throw new Error('Enter an amount above zero.');
       if (amount > saleBalance(s)) throw new Error('Payment is more than the balance owed.');
-      s.payments.push({ id: Date.now(), date: now(), amount, method, ref });
-      audit(d, 'Payment received', `${s.invoice} — ${amount.toLocaleString()} via ${method}`);
+      const receiptNo = nextReceiptNo(d);
+      s.payments.push({ id: Date.now(), date: now(), amount, method, ref, receiptNo });
+      audit(d, 'Payment received', `${receiptNo} for ${s.invoice} — ${amount.toLocaleString()} via ${method}`);
+      return receiptNo;
     }),
     cancelSale: (saleId: number, reason: string) => mutate((d) => {
       const s = d.sales.find((x) => x.id === saleId)!;
@@ -304,7 +320,7 @@ function useStoreState() {
     }),
     restore: (data: Db) => {
       if (!data?.settings || !data?.account || !Array.isArray(data.items) || !Array.isArray(data.sales)) throw new Error('This file is not a valid Vangy backup.');
-      setDb(data);
+      setDb(upgrade(data));
     },
   };
 

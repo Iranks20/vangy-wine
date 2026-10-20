@@ -39,8 +39,9 @@ input, select, textarea { font-size: 16px; } /* stops iOS zoom on focus */
 }
 
 /* Printing: only the printable area is shown (receipts, reports) */
+@page { size: A4; margin: 12mm; }
 @media print {
-  body { background: white; }
+  body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
   .print-area { box-shadow: none !important; border: none !important; }
 }

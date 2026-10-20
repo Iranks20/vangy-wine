@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Sales from './pages/Sales';
 import NewSale from './pages/NewSale';
 import SaleDetail from './pages/SaleDetail';
+import Invoices from './pages/Invoices';
+import Receipts, { ReceiptView } from './pages/Receipts';
 import Inventory from './pages/Inventory';
 import Production from './pages/Production';
 import Purchases from './pages/Purchases';
@@ -27,6 +29,10 @@ export default function App() {
         <Route path="sales" element={<Sales />} />
         <Route path="sales/new" element={<NewSale />} />
         <Route path="sales/:id" element={<SaleDetail />} />
+        <Route path="invoices" element={<Invoices />} />
+        <Route path="invoices/:id" element={<SaleDetail />} />
+        <Route path="receipts" element={<Receipts />} />
+        <Route path="receipts/:no" element={<ReceiptView />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="production" element={<Production />} />
         <Route path="purchases" element={<Purchases />} />

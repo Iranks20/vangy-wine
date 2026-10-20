@@ -21,7 +21,7 @@ export interface Customer {
 
 export interface Supplier { id: number; name: string; contact: string; phone: string; email: string; supplies: string }
 
-export interface Payment { id: number; date: string; amount: number; method: Method; ref?: string }
+export interface Payment { id: number; date: string; amount: number; method: Method; ref?: string; receiptNo?: string }
 
 export interface SaleLine { itemId: number; name: string; qty: number; price: number; discount: number; cost: number }
 
@@ -72,6 +72,8 @@ export interface Settings {
   businessName: string; email: string; phone: string; address: string; country: string; currency: string;
   taxRate: number; invoicePrefix: string; expiryAlertDays: number; allowOversell: boolean;
   lastBackup?: string;
+  // shown on invoices & receipts
+  tin: string; bankName: string; accountName: string; accountNo: string; mobileMoney: string; invoiceTerms: string;
 }
 
 export interface Db {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Boxes, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Plus, Receipt, Settings, ShoppingCart,
+  BarChart3, Boxes, ClipboardList, Factory, FileText, LayoutDashboard, LogOut, Menu, Plus, Receipt, ReceiptText, Settings, ShoppingCart,
   Truck, UserCog, Users, Wallet, X,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
@@ -10,6 +10,8 @@ import { cx } from './ui';
 export const NAV: { to: string; label: string; icon: typeof Boxes }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/sales', label: 'Sales', icon: ShoppingCart },
+  { to: '/invoices', label: 'Invoices', icon: FileText },
+  { to: '/receipts', label: 'Receipts', icon: ReceiptText },
   { to: '/inventory', label: 'Inventory', icon: Boxes },
   { to: '/production', label: 'Production', icon: Factory },
   { to: '/purchases', label: 'Purchases', icon: ClipboardList },
@@ -71,7 +73,7 @@ export default function Layout() {
   const quick = NAV.filter((n) => ['/', '/sales', '/inventory'].includes(n.to));
 
   return (
-    <div className="min-h-full lg:pl-64">
+    <div className="min-h-full lg:pl-64 print:pl-0">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block no-print"><SideNav /></aside>
 
       {open && (
@@ -92,7 +94,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
+      <main className="mx-auto max-w-7xl px-4 pb-28 pt-5 lg:px-8 lg:pb-10 print:max-w-none print:p-0">
         <Outlet />
       </main>
 

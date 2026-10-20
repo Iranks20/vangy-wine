@@ -19,6 +19,11 @@ export const EXPENSE_CATEGORIES = [
   'Packaging', 'Repairs and maintenance', 'Licences and compliance', 'Communications', 'Other operating expenses',
 ];
 
+export const INVOICE_DEFAULTS = {
+  tin: '', bankName: '', accountName: 'Vangy Wine Company Limited', accountNo: '', mobileMoney: '',
+  invoiceTerms: 'Payment is due by the date shown. Please quote the invoice number when paying. Goods once sold are only returnable under our returns policy.',
+};
+
 export function buildDemoDb(): Db {
   seed = 42;
   const items: Item[] = [
@@ -119,6 +124,8 @@ export function buildDemoDb(): Db {
   }
   sales.sort((a, b) => a.date.localeCompare(b.date));
   sales.forEach((s, i) => { s.id = i + 1; s.invoice = `INV-2026-${String(i + 1).padStart(5, '0')}`; });
+  sales.flatMap((s) => s.payments).sort((a, b) => a.date.localeCompare(b.date))
+    .forEach((p, i) => { p.receiptNo = `RCT-2026-${String(i + 1).padStart(5, '0')}`; });
   sales[sales.length - 12].status = 'cancelled';
 
   const purchases: Purchase[] = [
@@ -187,6 +194,7 @@ export function buildDemoDb(): Db {
       businessName: 'Vangy Wine Company Limited', email: 'vangywinecompanylimited@gmail.com', phone: '+256 700 000 001',
       address: 'Kampala, Uganda', country: 'Uganda', currency: 'UGX', taxRate: 0, invoicePrefix: 'INV',
       expiryAlertDays: 60, allowOversell: false, lastBackup: daysAgo(1, 18),
+      ...INVOICE_DEFAULTS,
     },
     items, movements, customers, suppliers, sales, purchases, batches, expenses, cash, employees,
     audit: [

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { DatabaseBackup, Download, Upload } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { downloadCsv, fmtDateTime, ugx } from '../lib/format';
-import { Badge, Button, Card, Field, Input, PageHeader, Tabs, useRun, useToast } from '../components/ui';
+import { Badge, Button, Card, Field, Input, PageHeader, Tabs, Textarea, useRun, useToast } from '../components/ui';
 import { DataTable } from '../components/DataTable';
 import type { Settings } from '../lib/types';
 import { KeyRound } from 'lucide-react';
@@ -42,6 +42,20 @@ export default function SettingsPage() {
             <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-wine-700" checked={s.allowOversell} onChange={(e) => setS({ ...s, allowOversell: e.target.checked })} />Allow selling more than stock (admin exception)</label>
           </div>
           <div className="mt-4 flex justify-end"><Button onClick={() => run(() => updateSettings(s), 'Settings saved')}>Save settings</Button></div>
+        </Card>
+      )}
+      {tab === 'business' && (
+        <Card title="Invoice & receipt details" className="mt-5">
+          <p className="mb-3 text-sm text-stone-500">Printed on every invoice and receipt. Leave a field blank to hide it.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="TIN (URA)"><Input value={s.tin} onChange={(e) => setS({ ...s, tin: e.target.value })} /></Field>
+            <Field label="Bank name"><Input value={s.bankName} onChange={(e) => setS({ ...s, bankName: e.target.value })} /></Field>
+            <Field label="Account name"><Input value={s.accountName} onChange={(e) => setS({ ...s, accountName: e.target.value })} /></Field>
+            <Field label="Account number"><Input value={s.accountNo} onChange={(e) => setS({ ...s, accountNo: e.target.value })} /></Field>
+            <Field label="Mobile money (number & name)"><Input value={s.mobileMoney} onChange={(e) => setS({ ...s, mobileMoney: e.target.value })} placeholder="e.g. MTN 07xx xxx xxx — Vangy Wine" /></Field>
+            <Field label="Invoice terms & notes" className="sm:col-span-2"><Textarea value={s.invoiceTerms} onChange={(e) => setS({ ...s, invoiceTerms: e.target.value })} /></Field>
+          </div>
+          <div className="mt-4 flex justify-end"><Button onClick={() => run(() => updateSettings(s), 'Invoice details saved')}>Save details</Button></div>
         </Card>
       )}
       {tab === 'business' && (
