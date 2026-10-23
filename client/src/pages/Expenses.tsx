@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Download, Plus } from 'lucide-react';
+import { Ban, Download, Eye, Paperclip, Pencil, Plus } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../lib/store';
 import { dayOf } from '../../../shared/reports';
 import { EXPENSE_CATEGORIES } from '../../../shared/defaults';
 import { downloadCsv, fmtDate, methodLabel, today, ugx } from '../lib/format';
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Expense, Method } from '../lib/types';
 
 export default function Expenses() {
   const { db, addExpense, updateExpense, voidExpense, openAttachment } = useStore();
   const [editId, setEditId] = useState<number | null>(null);
+  const [view, setView] = useState<Expense | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const run = useRun();
   const toast = useToast();
@@ -38,9 +39,7 @@ export default function Expenses() {
     { key: 'recipient', label: 'Paid to', hideOnMobile: true },
     { key: 'method', label: 'Method', value: (e) => methodLabel[e.method], hideOnMobile: true },
     { key: 'amount', label: 'Amount', align: 'right', render: (e) => <span className={e.status === 'voided' ? 'text-stone-400 line-through' : 'font-medium'}>{ugx(e.amount)}</span> },
-    { key: 'status', label: '', value: (e) => e.status, render: (e) => e.status === 'voided' ? <Badge>voided</Badge> : (
-      <button className="text-xs text-red-600 hover:underline" onClick={async (ev) => { ev.stopPropagation(); const r = await toast.confirm({ title: `Void ${e.ref}?`, text: 'The expense stays on record, marked as voided.', danger: true, reason: true, confirmLabel: 'Void' }); if (r) run(() => voidExpense(e.id, r), 'Expense voided'); }}>Void</button>
-    ) },
+    { key: 'status', label: 'Status', value: (e) => e.status, render: (e) => <Badge tone={e.status === 'voided' ? 'gray' : 'green'}>{e.status}</Badge> },
   ];
 
   const save = async () => {
@@ -50,6 +49,22 @@ export default function Expenses() {
       setOpen(false); setFile(null); setForm({ ...form, description: '', amount: '', recipient: '', reference: '' });
     }
   };
+
+  const openEdit = (e: Expense) => {
+    setView(null); setEditId(e.id); setFile(null);
+    setForm({ date: dayOf(e.date), category: e.category, description: e.description, amount: String(e.amount), method: e.method, recipient: e.recipient, reference: e.reference ?? '' });
+    setOpen(true);
+  };
+  const voidIt = async (e: Expense) => {
+    const r = await toast.confirm({ title: `Void ${e.ref}?`, text: 'The expense stays on record, marked as voided.', danger: true, reason: true, confirmLabel: 'Void' });
+    if (r) run(() => voidExpense(e.id, r), 'Expense voided').then((ok) => ok && setView(null));
+  };
+  const actions: RowAction<Expense>[] = [
+    { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'View receipt', icon: Paperclip, onClick: (e) => run(() => openAttachment(e.id), ''), show: (e) => !!e.hasAttachment },
+    { label: 'Edit', icon: Pencil, onClick: openEdit, show: (e) => e.status === 'active' },
+    { label: 'Void', icon: Ban, tone: 'danger', onClick: voidIt, show: (e) => e.status === 'active' },
+  ];
 
   return (
     <>
@@ -75,7 +90,7 @@ export default function Expenses() {
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
             <Select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category"><option value="">All categories</option>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
           </div>
-          <DataTable rows={rows} columns={cols} pageSize={8} onRowClick={(e) => { if (e.status !== 'active') return; setEditId(e.id); setFile(null); setForm({ date: dayOf(e.date), category: e.category, description: e.description, amount: String(e.amount), method: e.method, recipient: e.recipient, reference: e.reference ?? '' }); setOpen(true); }} emptyText="No expenses recorded for this month." />
+          <DataTable rows={rows} columns={cols} pageSize={8} actions={actions} onRowClick={setView} emptyText="No expenses recorded for this month." />
         </div>
       </div>
 
@@ -91,6 +106,20 @@ export default function Expenses() {
           <Field label="Receipt / reference"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></Field>
           <Field label="Attachment (receipt photo or PDF, up to 4 MB)" className="sm:col-span-2"><Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
         </div>
+      </Modal>
+      <Modal open={!!view} onClose={() => setView(null)} title={view ? `${view.ref} — ${view.category}` : ''}
+        footer={view && view.status === 'active' && <><Button variant="ghost" className="mr-auto text-red-600" onClick={() => voidIt(view)}>Void</Button><Button variant="secondary" onClick={() => openEdit(view)}><Pencil size={16} />Edit</Button></>}>
+        {view && <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="col-span-2"><p className="text-stone-500">Description</p><p className="font-medium">{view.description}</p></div>
+          <div><p className="text-stone-500">Date</p><p className="font-medium">{fmtDate(view.date)}</p></div>
+          <div><p className="text-stone-500">Amount</p><p className="font-semibold">{ugx(view.amount)}</p></div>
+          <div><p className="text-stone-500">Paid from</p><p className="font-medium">{methodLabel[view.method]}</p></div>
+          <div><p className="text-stone-500">Paid to</p><p className="font-medium">{view.recipient || '—'}</p></div>
+          <div><p className="text-stone-500">Reference</p><p className="font-medium">{view.reference || '—'}</p></div>
+          <div><p className="text-stone-500">Status</p><Badge tone={view.status === 'voided' ? 'gray' : 'green'}>{view.status}</Badge></div>
+          {view.voidReason && <div className="col-span-2"><p className="text-stone-500">Void reason</p><p className="font-medium text-red-600">{view.voidReason}</p></div>}
+          {view.hasAttachment && <div className="col-span-2"><Button size="sm" variant="secondary" onClick={() => run(() => openAttachment(view.id), '')}><Paperclip size={16} />Open attached receipt</Button></div>}
+        </div>}
       </Modal>
     </>
   );

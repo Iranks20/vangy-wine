@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Plus, Printer } from 'lucide-react';
+import { Eye, Pencil, Phone, Plus, Printer, Trash2 } from 'lucide-react';
 import { saleBalance, salePaid, saleStatus, saleTotal, useStore } from '../lib/store';
 import { customerTypeLabel, fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Textarea, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import { StatusBadge } from './Dashboard';
 import type { Customer, CustomerType } from '../lib/types';
 
@@ -40,6 +40,14 @@ export default function Customers() {
     { key: 'owes', label: 'Owes', align: 'right', value: (c) => owes(c.id), render: (c) => <span className={owes(c.id) ? 'font-semibold text-red-600' : ''}>{ugx(owes(c.id))}</span> },
   ];
 
+  const actions: RowAction<Customer>[] = [
+    { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'Edit', icon: Pencil, onClick: (x) => setEdit(x) },
+    { label: 'Delete', icon: Trash2, tone: 'danger', onClick: async (x) => {
+      if (await toast.confirm({ title: `Delete ${x.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteCustomer(x.id), 'Customer deleted');
+    } },
+  ];
+
   return (
     <>
       <PageHeader title="Customers" subtitle="Sales history, debts and follow-ups." actions={<Button onClick={() => setEdit({ ...blank })}><Plus size={16} />Add customer</Button>} />
@@ -49,7 +57,7 @@ export default function Customers() {
         <Stat label="31–60 days overdue" value={ugx(aging[2])} tone="red" />
         <Stat label="Over 60 days" value={ugx(aging[3])} tone="red" />
       </div>
-      <DataTable rows={db.customers} columns={cols} onRowClick={setView} />
+      <DataTable rows={db.customers} columns={cols} actions={actions} onRowClick={setView} />
 
       <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide
         footer={view && <><Button variant="secondary" onClick={() => window.print()}><Printer size={16} />Print statement</Button><Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button></>}>

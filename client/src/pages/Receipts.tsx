@@ -1,10 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, FileText, Printer } from 'lucide-react';
+import { ArrowLeft, Ban, Download, Eye, FileText, Printer } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDateTime, methodLabel, today, ugx } from '../lib/format';
 import { Badge, Button, Empty, PageHeader, Stat, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
+import { useSaleActions } from '../components/SaleModals';
 import { ReceiptDoc } from '../components/Documents';
 import type { Payment, Sale } from '../lib/types';
 
@@ -20,6 +21,12 @@ export default function Receipts() {
   const rows = useReceipts();
   const nav = useNavigate();
   const valid = rows.filter((r) => !r.voided);
+  const { voidReceipt } = useSaleActions();
+  const actions: RowAction<Row>[] = [
+    { label: 'View receipt', icon: Eye, onClick: (r) => nav(`/receipts/${r.receiptNo}`) },
+    { label: 'View invoice', icon: FileText, onClick: (r) => nav(`/invoices/${r.sale.id}`) },
+    { label: 'Void receipt', icon: Ban, tone: 'danger', onClick: (r) => voidReceipt(r.sale, r), show: (r) => !r.voided && r.sale.status === 'completed' },
+  ];
   const thisMonth = valid.filter((r) => dayOf(r.date).slice(0, 7) === today().slice(0, 7));
 
   const cols: Column<Row>[] = [
@@ -42,7 +49,7 @@ export default function Receipts() {
         <Stat label="All receipts" value={valid.length} hint={rows.length > valid.length ? `${rows.length - valid.length} voided` : undefined} />
         <Stat label="All money received" value={ugx(valid.reduce((t, r) => t + r.amount, 0))} tone="gray" />
       </div>
-      <DataTable rows={rows} columns={cols} onRowClick={(r) => nav(`/receipts/${r.receiptNo}`)} searchPlaceholder="Search receipt, invoice or customer…" />
+      <DataTable rows={rows} columns={cols} actions={actions} onRowClick={(r) => nav(`/receipts/${r.receiptNo}`)} searchPlaceholder="Search receipt, invoice or customer…" />
     </>
   );
 }

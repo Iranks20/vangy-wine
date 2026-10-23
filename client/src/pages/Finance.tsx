@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Banknote, Building2, Download, Plus, Scale, Smartphone } from 'lucide-react';
+import { Ban, Banknote, Building2, Download, Eye, Plus, Scale, Smartphone, Trash2 } from 'lucide-react';
 import { cashbook, purchaseBalance, saleBalance, useStore, type CashLine } from '../lib/store';
 import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDate, fmtDateTime, methodLabel, today, ugx } from '../lib/format';
 import { Button, Card, Field, Input, Modal, PageHeader, Select, Stat, Tabs, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Method } from '../lib/types';
 
 export default function Finance() {
@@ -15,6 +15,7 @@ export default function Finance() {
   const [acct, setAcct] = useState<'' | Method>('');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ kind: 'other_in', method: 'cash' as Method, to: 'bank' as Method, amount: '', description: '' });
+  const [view, setView] = useState<CashLine | null>(null);
   const [counted, setCounted] = useState<Record<string, string>>({});
 
   const book = cashbook(db);
@@ -35,12 +36,6 @@ export default function Finance() {
     { key: 'method', label: 'Account', value: (c) => methodLabel[c.method] },
     { key: 'in', label: 'Money in', align: 'right', value: (c) => (c.direction === 'in' ? c.amount : 0), render: (c) => c.direction === 'in' ? <span className="text-emerald-700">{ugx(c.amount)}</span> : '' },
     { key: 'out', label: 'Money out', align: 'right', value: (c) => (c.direction === 'out' ? c.amount : 0), render: (c) => c.direction === 'out' ? <span className="text-red-600">{ugx(c.amount)}</span> : '' },
-    { key: 'act', label: '', value: () => '', render: (c) => c.id.startsWith('c') ? (
-      <button className="text-xs text-red-600 hover:underline" onClick={async () => {
-        const reason = await toast.confirm({ title: 'Void this entry?', text: c.category === 'Transfer' ? 'Both sides of the transfer will be voided. They stay on record with your reason.' : 'Use this for an entry made by mistake. It stays on record with your reason.', danger: true, reason: true, confirmLabel: 'Void entry' });
-        if (reason) run(() => voidCash(Number(c.id.slice(1)), reason), 'Entry voided');
-      }}>Void</button>
-    ) : null },
   ];
 
   const save = async () => {
@@ -59,6 +54,17 @@ export default function Finance() {
     if (ok) { setOpen(false); setForm({ ...form, amount: '', description: '' }); }
   };
 
+  const voidEntry = async (c: CashLine) => {
+    const reason = await toast.confirm({ title: 'Void this entry?', text: c.category === 'Transfer' ? 'Both sides of the transfer will be voided. They stay on record with your reason.' : 'Use this for an entry made by mistake. It stays on record with your reason.', danger: true, reason: true, confirmLabel: 'Void entry' });
+    if (reason) run(() => voidCash(Number(c.id.slice(1)), reason), 'Entry voided').then((ok) => ok && setView(null));
+  };
+  // Customer receipts, supplier payments and expenses are corrected on their own pages.
+  const manual = (c: CashLine) => c.id.startsWith('c');
+  const actions: RowAction<CashLine>[] = [
+    { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'Void entry', icon: Ban, tone: 'danger', onClick: voidEntry, show: manual },
+  ];
+
   return (
     <>
       <PageHeader title="Finance" subtitle="Actual money in and out — separate from revenue and profit."
@@ -75,7 +81,7 @@ export default function Finance() {
       </div>
       <Tabs value={tab} onChange={setTab} tabs={[{ id: 'cashbook', label: 'Cashbook' }, { id: 'daily', label: 'Daily summary' }, { id: 'recon', label: 'Reconciliation' }]} />
 
-      {tab === 'cashbook' && <DataTable rows={rows} columns={cols} toolbar={<Select value={acct} onChange={(e) => setAcct(e.target.value as Method)} aria-label="Account"><option value="">All accounts</option>{(['cash', 'mobile_money', 'bank'] as const).map((m) => <option key={m} value={m}>{methodLabel[m]}</option>)}</Select>} />}
+      {tab === 'cashbook' && <DataTable rows={rows} columns={cols} actions={actions} onRowClick={setView} toolbar={<Select value={acct} onChange={(e) => setAcct(e.target.value as Method)} aria-label="Account"><option value="">All accounts</option>{(['cash', 'mobile_money', 'bank'] as const).map((m) => <option key={m} value={m}>{methodLabel[m]}</option>)}</Select>} />}
 
       {tab === 'daily' && (
         <DataTable rows={daily} columns={[
@@ -106,7 +112,7 @@ export default function Finance() {
             <h3 className="mb-2 mt-6 text-sm font-semibold">Saved counts</h3>
             <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-stone-500"><tr><th className="py-1">When</th><th>Account</th><th className="text-right">System</th><th className="text-right">Counted</th><th className="text-right">Difference</th><th className="pl-3">By</th><th></th></tr></thead>
-              <tbody className="divide-y divide-stone-100">{db.reconciliations.map((r) => <tr key={r.id}><td className="py-1.5">{fmtDateTime(r.date)}</td><td>{methodLabel[r.method]}</td><td className="text-right">{ugx(r.systemAmount)}</td><td className="text-right">{ugx(r.counted)}</td><td className={`text-right font-medium ${r.difference ? 'text-red-600' : 'text-emerald-700'}`}>{ugx(r.difference)}</td><td className="pl-3">{r.user}</td><td className="pl-3 text-right"><button className="text-xs text-red-600 hover:underline" onClick={async () => { if (await toast.confirm({ title: 'Delete this count?', text: 'Use this for a count entered by mistake.', danger: true, confirmLabel: 'Delete' })) run(() => deleteCount(r.id), 'Count deleted'); }}>Delete</button></td></tr>)}</tbody>
+              <tbody className="divide-y divide-stone-100">{db.reconciliations.map((r) => <tr key={r.id}><td className="py-1.5">{fmtDateTime(r.date)}</td><td>{methodLabel[r.method]}</td><td className="text-right">{ugx(r.systemAmount)}</td><td className="text-right">{ugx(r.counted)}</td><td className={`text-right font-medium ${r.difference ? 'text-red-600' : 'text-emerald-700'}`}>{ugx(r.difference)}</td><td className="pl-3">{r.user}</td><td className="pl-3 text-right"><button className="rounded-lg p-1.5 text-red-600 hover:bg-red-50" title="Delete count" aria-label="Delete count" onClick={async () => { if (await toast.confirm({ title: 'Delete this count?', text: 'Use this for a count entered by mistake.', danger: true, confirmLabel: 'Delete' })) run(() => deleteCount(r.id), 'Count deleted'); }}><Trash2 size={16} /></button></td></tr>)}</tbody>
             </table></div>
           </>}
         </Card>
@@ -127,6 +133,17 @@ export default function Finance() {
           </div>
           <Field label="Description"><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
         </div>
+      </Modal>
+      <Modal open={!!view} onClose={() => setView(null)} title={view?.description ?? ''}
+        footer={view && manual(view) && <Button variant="ghost" className="text-red-600" onClick={() => voidEntry(view)}><Ban size={16} />Void entry</Button>}>
+        {view && <div className="grid grid-cols-2 gap-3 text-sm">
+          <div><p className="text-stone-500">Date</p><p className="font-medium">{fmtDateTime(view.date)}</p></div>
+          <div><p className="text-stone-500">Type</p><p className="font-medium">{view.category}</p></div>
+          <div><p className="text-stone-500">Account</p><p className="font-medium">{methodLabel[view.method]}</p></div>
+          <div><p className="text-stone-500">{view.direction === 'in' ? 'Money in' : 'Money out'}</p><p className={`font-semibold ${view.direction === 'in' ? 'text-emerald-700' : 'text-red-600'}`}>{ugx(view.amount)}</p></div>
+          <div className="col-span-2"><p className="text-stone-500">Reference</p><p className="font-mono text-xs">{view.ref}</p></div>
+          {!manual(view) && <p className="col-span-2 rounded-lg bg-stone-50 p-2 text-xs text-stone-500">This entry comes from {view.category.startsWith('Expense') ? 'an expense' : view.category === 'Supplier payment' ? 'a supplier payment' : 'a sale'} — correct it on that page.</p>}
+        </div>}
       </Modal>
     </>
   );

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Download, Plus, Printer, SlidersHorizontal } from 'lucide-react';
+import { Download, Eye, Pencil, Plus, Printer, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { categoryLabel, downloadCsv, fmtDate, fmtDateTime, num, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Item, ItemCategory, Movement } from '../lib/types';
 
 const blank: Item = { id: 0, code: '', name: '', category: 'raw', unit: 'kg', price: 0, cost: 0, qty: 0, min: 0, location: '', lots: [] };
@@ -45,6 +45,16 @@ export default function Inventory() {
     { key: 'note', label: 'Note', hideOnMobile: true, value: (m) => m.note ?? '' },
   ];
 
+  const removeItem = async (i: Item) => {
+    if (await toast.confirm({ title: `Delete ${i.name}?`, text: 'This cannot be undone. Items that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteItem(i.id), 'Item deleted');
+  };
+  const itemActions: RowAction<Item>[] = [
+    { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'Edit', icon: Pencil, onClick: (i) => setEdit(i) },
+    { label: 'Adjust stock', icon: SlidersHorizontal, onClick: (i) => setAdj({ itemId: i.id, kind: 'damage', qty: '', reason: '' }) },
+    { label: 'Delete', icon: Trash2, tone: 'danger', onClick: removeItem },
+  ];
+
   return (
     <>
       <PageHeader title="Inventory" subtitle="Finished wine, raw materials and packaging. Valued at weighted-average cost."
@@ -63,11 +73,11 @@ export default function Inventory() {
       </div>
 
       {tab === 'items' && (
-        <DataTable rows={items} columns={cols} onRowClick={setView}
+        <DataTable rows={items} columns={cols} actions={itemActions} onRowClick={setView}
           toolbar={<Select value={cat} onChange={(e) => setCat(e.target.value as ItemCategory)} aria-label="Category"><option value="">All categories</option>{Object.entries(categoryLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>} />
       )}
       {tab === 'moves' && (
-        <DataTable rows={db.movements} columns={mcols} searchPlaceholder="Search item, reference…"
+        <DataTable rows={db.movements} columns={mcols} actions={[{ label: 'View item', icon: Eye, onClick: (m) => setView(db.items.find((i) => i.id === m.itemId) ?? null) }]} searchPlaceholder="Search item, reference…"
           toolbar={<Button variant="secondary" onClick={() => downloadCsv('stock-movements.csv', ['Date', 'Item', 'Movement', 'Qty', 'Source', 'By', 'Note'], db.movements.map((m) => [fmtDateTime(m.date), name(m.itemId), m.type, m.qty, m.ref, m.user, m.note ?? '']))}><Download size={16} />CSV</Button>} />
       )}
       {tab === 'count' && (

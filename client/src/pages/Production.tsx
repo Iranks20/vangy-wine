@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, FlaskConical, PackageCheck, PackagePlus, Plus, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, FlaskConical, PackageCheck, PackagePlus, Pencil, Plus, Trash2, XCircle } from 'lucide-react';
 import { batchCost, batchGoodUnits, useStore } from '../lib/store';
 import { fmtDate, fmtDateTime, num, today, ugx } from '../lib/format';
 import { Badge, Button, Card, Empty, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, cx, useRun, useToast } from '../components/ui';
@@ -100,7 +100,7 @@ export default function Production() {
           {[...db.batches].reverse().map((x) => {
             const idx = STAGES.indexOf(x.stage);
             return (
-              <button key={x.id} onClick={() => open(x)} className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:border-wine-200 hover:shadow">
+              <div key={x.id} role="button" tabIndex={0} onClick={() => open(x)} onKeyDown={(e) => e.key === 'Enter' && open(x)} className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:border-wine-200 hover:shadow">
                 <div className="flex items-start justify-between">
                   <div><p className="font-mono text-sm font-semibold text-wine-700">{x.batchNo}</p><p className="text-xs text-stone-500">Started {fmtDate(x.startDate)} · {x.responsible}</p></div>
                   <Badge tone={x.status === 'released' ? 'green' : x.status === 'rejected' ? 'red' : 'amber'}>{x.status === 'in_progress' ? x.stage : x.status}</Badge>
@@ -115,7 +115,12 @@ export default function Production() {
                   <div><dt className="text-stone-500">Good units</dt><dd className="font-semibold">{batchGoodUnits(x) || '—'}</dd></div>
                   <div><dt className="text-stone-500">Cost</dt><dd className="font-semibold">{ugx(batchCost(x))}</dd></div>
                 </dl>
-              </button>
+                <div className="mt-3 flex justify-end gap-1 border-t border-stone-100 pt-2" onClick={(e) => e.stopPropagation()}>
+                  <button className="rounded-lg p-1.5 text-stone-600 hover:bg-wine-50 hover:text-wine-700" title="View details" aria-label="View details" onClick={() => open(x)}><Eye size={16} /></button>
+                  {x.status === 'in_progress' && <button className="rounded-lg p-1.5 text-stone-600 hover:bg-wine-50 hover:text-wine-700" title="Edit batch details" aria-label="Edit batch details" onClick={() => { open(x); setEditB({ expectedLitres: String(x.expectedLitres), responsible: x.responsible }); }}><Pencil size={16} /></button>}
+                  {x.status === 'in_progress' && <button className="rounded-lg p-1.5 text-red-600 hover:bg-red-50" title="Reject batch" aria-label="Reject batch" onClick={async () => { const r = await toast.confirm({ title: `Reject ${x.batchNo}?`, text: 'Materials already used are recorded as wastage.', danger: true, reason: true, confirmLabel: 'Reject batch' }); if (r) run(() => rejectBatch(x.id, r), 'Batch rejected'); }}><XCircle size={16} /></button>}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -125,7 +130,10 @@ export default function Production() {
         <div className="space-y-4">
           <div className="flex justify-end"><Button variant="secondary" onClick={() => setRecipe({ id: 0, name: '', baseLitres: 100, lines: inputs[0] ? [{ itemId: inputs[0].id, qty: 0 }] : [] })}><Plus size={16} />New recipe</Button></div>
           {db.recipes.length ? db.recipes.map((r) => (
-            <Card key={r.id} title={`${r.name} — per ${r.baseLitres} litres`} action={<Button size="sm" variant="ghost" onClick={() => setRecipe(r)}>Edit</Button>}>
+            <Card key={r.id} title={`${r.name} — per ${r.baseLitres} litres`} action={<div className="flex gap-1">
+              <button className="rounded-lg p-1.5 text-stone-600 hover:bg-wine-50 hover:text-wine-700" title="Edit recipe" aria-label="Edit recipe" onClick={() => setRecipe(r)}><Pencil size={16} /></button>
+              <button className="rounded-lg p-1.5 text-red-600 hover:bg-red-50" title="Delete recipe" aria-label="Delete recipe" onClick={async () => { if (await toast.confirm({ title: `Delete ${r.name}?`, text: 'Batches already made are not affected.', danger: true, confirmLabel: 'Delete' })) run(() => deleteRecipe(r.id), 'Recipe deleted'); }}><Trash2 size={16} /></button>
+            </div>}>
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-stone-500"><tr><th className="py-2">Ingredient</th><th className="text-right">Quantity</th><th className="text-right">Est. cost</th></tr></thead>
                 <tbody className="divide-y divide-stone-100">{r.lines.map((l) => { const it = db.items.find((i) => i.id === l.itemId); return <tr key={l.itemId}><td className="py-2">{it?.name}</td><td className="text-right">{l.qty} {it?.unit}</td><td className="text-right">{ugx(l.qty * (it?.cost ?? 0))}</td></tr>; })}</tbody>

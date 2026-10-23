@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, type LucideIcon } from 'lucide-react';
 import { Empty, cx } from './ui';
 
 export interface Column<T> {
@@ -11,9 +11,34 @@ export interface Column<T> {
   hideOnMobile?: boolean;
 }
 
-// Searchable, sortable, paginated table. On phones each row becomes a card.
-export function DataTable<T>({ rows, columns, onRowClick, pageSize = 12, searchPlaceholder = 'Search…', toolbar, emptyText, initialSort }: {
-  rows: T[]; columns: Column<T>[]; onRowClick?: (r: T) => void; pageSize?: number; searchPlaceholder?: string;
+// A button in the Actions column. `show` hides it for rows it does not apply to.
+export interface RowAction<T> {
+  label: string;
+  icon: LucideIcon;
+  onClick: (row: T) => void;
+  tone?: 'danger';
+  show?: (row: T) => boolean;
+}
+
+function ActionButtons<T>({ row, actions, compact }: { row: T; actions: RowAction<T>[]; compact?: boolean }) {
+  const list = actions.filter((a) => !a.show || a.show(row));
+  return (
+    <div className={cx('flex items-center gap-1', compact ? 'justify-end' : 'flex-wrap pt-2')} onClick={(e) => e.stopPropagation()}>
+      {list.map((a) => (
+        <button key={a.label} type="button" title={a.label} aria-label={a.label} onClick={() => a.onClick(row)}
+          className={cx('inline-flex items-center gap-1.5 rounded-lg transition focus-visible:outline-2 focus-visible:outline-wine-600',
+            compact ? 'p-1.5' : 'border border-stone-200 px-2.5 py-1.5 text-xs font-medium',
+            a.tone === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-stone-600 hover:bg-wine-50 hover:text-wine-700')}>
+          <a.icon size={compact ? 16 : 14} />{!compact && a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Searchable, sortable, paginated table with an optional Actions column. On phones each row becomes a card.
+export function DataTable<T>({ rows, columns, onRowClick, actions, pageSize = 12, searchPlaceholder = 'Search…', toolbar, emptyText, initialSort }: {
+  rows: T[]; columns: Column<T>[]; onRowClick?: (r: T) => void; actions?: RowAction<T>[]; pageSize?: number; searchPlaceholder?: string;
   toolbar?: ReactNode; emptyText?: string; initialSort?: { key: string; dir: 1 | -1 };
 }) {
   const [q, setQ] = useState('');
@@ -65,16 +90,18 @@ export function DataTable<T>({ rows, columns, onRowClick, pageSize = 12, searchP
                       </button>
                     </th>
                   ))}
+                  {actions && <th className="px-4 py-2.5 text-right font-medium normal-case">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {shown.map((r, i) => (
                   <tr key={i} onClick={() => onRowClick?.(r)} className={cx(onRowClick && 'cursor-pointer hover:bg-wine-50/50')}>
                     {columns.map((c) => (
-                      <td key={c.key} className={cx('px-4 py-2.5 align-middle', c.align === 'right' && 'text-right tabular-nums')}>
+                      <td key={c.key} className={cx('px-4 py-2.5 align-middle', c.align === 'right' && 'whitespace-nowrap text-right tabular-nums')}>
                         {c.render ? c.render(r) : String(val(c, r))}
                       </td>
                     ))}
+                    {actions && <td className="px-2 py-1.5 align-middle"><ActionButtons row={r} actions={actions} compact /></td>}
                   </tr>
                 ))}
               </tbody>
@@ -90,6 +117,7 @@ export function DataTable<T>({ rows, columns, onRowClick, pageSize = 12, searchP
                     <span className={cx(j > 0 && 'text-right')}>{c.render ? c.render(r) : String(val(c, r))}</span>
                   </div>
                 ))}
+                {actions && <ActionButtons row={r} actions={actions} />}
               </li>
             ))}
           </ul>

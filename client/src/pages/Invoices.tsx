@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus } from 'lucide-react';
+import { Ban, Download, Eye, HandCoins, Pencil, Plus } from 'lucide-react';
 import { saleBalance, salePaid, saleTotal, useStore } from '../lib/store';
 import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Input, PageHeader, Select, Stat, type Tone } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
+import { PaymentModal, SaleEditModal, useSaleActions } from '../components/SaleModals';
 import type { Sale } from '../lib/types';
 
 export function invoiceStatus(s: Sale) {
@@ -19,6 +20,9 @@ const tone: Record<string, Tone> = { Paid: 'green', 'Part paid': 'amber', Unpaid
 
 export default function Invoices() {
   const { db } = useStore();
+  const { cancel } = useSaleActions();
+  const [payFor, setPayFor] = useState<Sale | null>(null);
+  const [editFor, setEditFor] = useState<Sale | null>(null);
   const nav = useNavigate();
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
@@ -35,6 +39,13 @@ export default function Invoices() {
     { key: 'total', label: 'Amount', align: 'right', value: saleTotal, render: (s) => ugx(saleTotal(s)) },
     { key: 'balance', label: 'Balance', align: 'right', value: saleBalance, render: (s) => <span className={saleBalance(s) > 0 ? 'font-semibold text-red-600' : ''}>{ugx(saleBalance(s))}</span> },
     { key: 'status', label: 'Status', value: invoiceStatus, render: (s) => <Badge tone={tone[invoiceStatus(s)]}>{invoiceStatus(s)}</Badge> },
+  ];
+
+  const actions: RowAction<Sale>[] = [
+    { label: 'View invoice', icon: Eye, onClick: (s) => nav(`/invoices/${s.id}`) },
+    { label: 'Record payment', icon: HandCoins, onClick: setPayFor, show: (s) => saleBalance(s) > 0 },
+    { label: 'Edit details', icon: Pencil, onClick: setEditFor },
+    { label: 'Cancel sale', icon: Ban, onClick: cancel, tone: 'danger', show: (s) => s.status === 'completed' },
   ];
 
   return (
@@ -57,7 +68,9 @@ export default function Invoices() {
           <option value="">All statuses</option>{Object.keys(tone).map((t) => <option key={t}>{t}</option>)}
         </Select>
       </div>
-      <DataTable rows={rows} columns={cols} onRowClick={(s) => nav(`/invoices/${s.id}`)} searchPlaceholder="Search invoice number or customer…" />
+      <DataTable rows={rows} columns={cols} actions={actions} onRowClick={(s) => nav(`/invoices/${s.id}`)} searchPlaceholder="Search invoice number or customer…" />
+      <PaymentModal sale={payFor} onClose={() => setPayFor(null)} />
+      <SaleEditModal sale={editFor} onClose={() => setEditFor(null)} />
     </>
   );
 }

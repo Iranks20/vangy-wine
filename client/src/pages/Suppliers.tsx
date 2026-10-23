@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Mail, Phone, Plus } from 'lucide-react';
+import { Eye, Mail, Pencil, Phone, Plus, Trash2 } from 'lucide-react';
 import { purchaseBalance, purchasePaid, purchaseTotal, useStore } from '../lib/store';
 import { fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Supplier } from '../lib/types';
 
 const blank: Supplier = { id: 0, name: '', contact: '', phone: '', email: '', supplies: '' };
@@ -26,10 +26,18 @@ export default function Suppliers() {
     { key: 'owed', label: 'We owe', align: 'right', value: (s) => owed(s.id), render: (s) => <span className={owed(s.id) ? 'font-semibold text-red-600' : ''}>{ugx(owed(s.id))}</span> },
   ];
 
+  const actions: RowAction<Supplier>[] = [
+    { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'Edit', icon: Pencil, onClick: (x) => setEdit(x) },
+    { label: 'Delete', icon: Trash2, tone: 'danger', onClick: async (x) => {
+      if (await toast.confirm({ title: `Delete ${x.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteSupplier(x.id), 'Supplier deleted');
+    } },
+  ];
+
   return (
     <>
       <PageHeader title="Suppliers" subtitle="Who supplies what, and what we owe them." actions={<Button onClick={() => setEdit({ ...blank })}><Plus size={16} />Add supplier</Button>} />
-      <DataTable rows={db.suppliers} columns={cols} onRowClick={setView} />
+      <DataTable rows={db.suppliers} columns={cols} actions={actions} onRowClick={setView} />
 
       <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide footer={view && <Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button>}>
         {view && <>

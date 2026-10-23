@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Plus } from 'lucide-react';
+import { Ban, Download, Eye, HandCoins, Pencil, Plus } from 'lucide-react';
 import { saleBalance, salePaid, saleStatus, saleTotal, useStore } from '../lib/store';
 import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDateTime, methodLabel, ugx } from '../lib/format';
 import { Button, Input, PageHeader, Select, Stat } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
+import { PaymentModal, SaleEditModal, useSaleActions } from '../components/SaleModals';
 import { StatusBadge } from './Dashboard';
 import type { Sale } from '../lib/types';
 
 export default function Sales() {
   const { db } = useStore();
+  const { cancel } = useSaleActions();
+  const [payFor, setPayFor] = useState<Sale | null>(null);
+  const [editFor, setEditFor] = useState<Sale | null>(null);
   const nav = useNavigate();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -41,6 +45,13 @@ export default function Sales() {
   const exportCsv = () => downloadCsv('sales.csv', ['Invoice', 'Date', 'Customer', 'Items', 'Total', 'Paid', 'Balance', 'Status', 'Salesperson'],
     rows.map((s) => [s.invoice, fmtDateTime(s.date), s.customerName, s.lines.map((l) => `${l.qty} x ${l.name}`).join('; '), saleTotal(s), salePaid(s), saleBalance(s), saleStatus(s), s.salesperson]));
 
+  const actions: RowAction<Sale>[] = [
+    { label: 'View invoice', icon: Eye, onClick: (s) => nav(`/sales/${s.id}`) },
+    { label: 'Record payment', icon: HandCoins, onClick: setPayFor, show: (s) => saleBalance(s) > 0 },
+    { label: 'Edit details', icon: Pencil, onClick: setEditFor },
+    { label: 'Cancel sale', icon: Ban, onClick: cancel, tone: 'danger', show: (s) => s.status === 'completed' },
+  ];
+
   return (
     <>
       <PageHeader title="Sales" subtitle="Every invoice, payment and balance."
@@ -67,7 +78,9 @@ export default function Sales() {
           <option value="">All salespeople</option>{people.map((p) => <option key={p}>{p}</option>)}
         </Select>
       </div>
-      <DataTable rows={rows} columns={cols} onRowClick={(s) => nav(`/sales/${s.id}`)} searchPlaceholder="Search invoice, customer, product…" />
+      <DataTable rows={rows} columns={cols} actions={actions} onRowClick={(s) => nav(`/sales/${s.id}`)} searchPlaceholder="Search invoice, customer, product…" />
+      <PaymentModal sale={payFor} onClose={() => setPayFor(null)} />
+      <SaleEditModal sale={editFor} onClose={() => setEditFor(null)} />
     </>
   );
 }

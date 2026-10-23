@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Plus, Trash2, Truck } from 'lucide-react';
+import { Ban, Eye, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import { purchaseBalance, purchaseBilled, purchasePaid, purchaseTotal, useStore } from '../lib/store';
 import { fmtDate, fmtDateTime, methodLabel, num, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, useRun, useToast } from '../components/ui';
-import { DataTable, type Column } from '../components/DataTable';
+import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Method, Purchase } from '../lib/types';
 
 const tone = { ordered: 'blue', partial: 'amber', received: 'green', cancelled: 'gray' } as const;
@@ -48,6 +48,17 @@ export default function Purchases() {
     if (ok) setNewOpen(false);
   };
 
+  const editable = (x: Purchase) => x.status === 'ordered' && !live(x).length && !x.lines.some((l) => l.received > 0);
+  const cancelOrder = async (x: Purchase) => {
+    if (await toast.confirm({ title: `Cancel ${x.po}?`, text: 'The order stays on record as cancelled.', danger: true, confirmLabel: 'Cancel order' })) run(() => cancelPurchase(x.id), 'Order cancelled');
+  };
+  const actions: RowAction<Purchase>[] = [
+    { label: 'View details', icon: Eye, onClick: openPo },
+    { label: 'Receive goods', icon: Truck, onClick: openPo, show: (x) => x.status === 'ordered' || x.status === 'partial' },
+    { label: 'Edit order', icon: Pencil, onClick: startEdit, show: editable },
+    { label: 'Cancel order', icon: Ban, tone: 'danger', onClick: cancelOrder, show: (x) => x.status === 'ordered' && !live(x).length },
+  ];
+
   return (
     <>
       <PageHeader title="Purchases" subtitle="Stock only increases when goods are actually received."
@@ -58,7 +69,7 @@ export default function Purchases() {
         <Stat label="Paid to suppliers" value={ugx(db.purchases.reduce((t, x) => t + purchasePaid(x), 0))} tone="green" />
         <Stat label="Owed to suppliers" value={ugx(db.purchases.reduce((t, x) => t + Math.max(0, purchaseBalance(x)), 0))} tone="red" />
       </div>
-      <DataTable rows={[...db.purchases].reverse()} columns={cols} onRowClick={openPo} />
+      <DataTable rows={[...db.purchases].reverse()} columns={cols} actions={actions} onRowClick={openPo} />
 
       <Modal open={newOpen} onClose={() => setNewOpen(false)} title={editId ? `Edit ${db.purchases.find((x) => x.id === editId)?.po}` : 'New purchase order'} wide
         footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={save} disabled={!db.suppliers.length || !buyable.length}>{editId ? 'Save changes' : 'Create order'}</Button></>}>
