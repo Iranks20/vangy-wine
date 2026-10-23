@@ -16,7 +16,7 @@ function Letterhead({ s, title, rows }: { s: Settings; title: string; rows: [str
         <div className="min-w-0 text-sm leading-relaxed text-stone-600">
           <p className="font-display text-xl font-bold text-wine-800">{s.businessName}</p>
           <p>{s.address}</p>
-          <p>Tel: {s.phone}</p>
+          {s.phone && <p>Tel: {s.phone}</p>}
           <p>{s.email}</p>
           {s.tin && <p>TIN: {s.tin}</p>}
         </div>

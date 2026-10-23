@@ -12,6 +12,13 @@ describe('health', () => {
   });
 });
 
+describe('database', () => {
+  it('uses InnoDB for every table so transactions and foreign keys work', async () => {
+    const { assertInnoDb } = await import('../src/db');
+    await expect(assertInnoDb(api.ctx.db)).resolves.toBeUndefined();
+  });
+});
+
 describe('auth', () => {
   it('created the director login from the environment during migration', async () => {
     const u = await api.ctx.db('users').where({ username: TEST_ENV.ADMIN_USERNAME }).first();

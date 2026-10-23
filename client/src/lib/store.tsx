@@ -2,21 +2,17 @@
 // which applies the business rules, and the affected records are then reloaded.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DEFAULT_SETTINGS } from '../../../shared/defaults';
-import { api, setUnauthorizedHandler, token } from './api';
+import { api, newIdemKey, setUnauthorizedHandler, token } from './api';
 import type {
   Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
 } from './types';
-import { batchCost, batchGoodUnits, purchasePaid, purchaseTotal, saleBalance, saleTotal } from '../../../shared/calc';
+import { batchCost, batchGoodUnits, purchasePaid, purchaseTotal } from '../../../shared/calc';
 
 export * from '../../../shared/calc';
 
 // ---------- store ----------
 type NewSale = { salesperson: string; customerId?: number; customerName: string; customerPhone?: string; lines: Omit<SaleLine, 'cost' | 'name'>[]; paid: number; method: Method | 'credit'; delivery?: string; notes?: string; date: string };
 
-const nextReceiptNo = (d: Db) => {
-  const n = d.sales.flatMap((s) => s.payments).reduce((m, p) => Math.max(m, Number(p.receiptNo?.split('-')[2] ?? 0)), 0);
-  return `RCT-${new Date().getFullYear()}-${String(n + 1).padStart(5, '0')}`;
-};
 
 // Records loaded from the API, by key. Keys not listed here still use local sample records (moved over phase by phase).
 const API_RESOURCES = {
@@ -26,6 +22,7 @@ const API_RESOURCES = {
   customers: '/customers',
   suppliers: '/suppliers',
   employees: '/employees',
+  sales: '/sales',
 } satisfies Partial<Record<keyof Db, string>>;
 type ApiKey = keyof typeof API_RESOURCES;
 
@@ -102,49 +99,24 @@ function useStoreState() {
       await refresh('audit');
     },
 
-    addSale: (input: NewSale) => mutate((d) => {
-      if (!input.lines.length) throw new Error('Add at least one product.');
-      const id = nextId(d.sales);
-      const invoice = `${d.settings.invoicePrefix}-${new Date().getFullYear()}-${String(id).padStart(5, '0')}`;
-      const lines: SaleLine[] = input.lines.map((l) => {
-        const it = d.items.find((i) => i.id === l.itemId)!;
-        if (l.qty <= 0) throw new Error('Quantity must be more than zero.');
-        if (l.discount > l.qty * l.price) throw new Error('Discount cannot be more than the line value.');
-        stockOut(d, it.id, l.qty, 'Sale', invoice);
-        return { ...l, name: it.name, cost: it.cost };
-      });
-      const sale: Sale = {
-        id, invoice, date: input.date, customerId: input.customerId, customerName: input.customerName || 'Walk-in customer',
-        customerPhone: input.customerPhone, lines, payments: [], salesperson: input.salesperson || (user?.name ?? ''),
-        delivery: input.delivery, notes: input.notes, status: 'completed',
-      };
-      const total = saleTotal(sale);
-      if (input.paid > total) throw new Error('Amount paid cannot be more than the total.');
-      if (input.paid < total && !input.customerId) throw new Error('Credit or part-payment needs a registered customer, so the debt can be tracked.');
-      if (input.paid > 0) sale.payments.push({ id: Date.now(), date: input.date, amount: input.paid, method: input.method === 'credit' ? 'cash' : input.method, receiptNo: nextReceiptNo(d) });
-      const cust = d.customers.find((c) => c.id === input.customerId);
-      const due = new Date(input.date); due.setDate(due.getDate() + (cust?.terms ?? 0));
-      sale.dueDate = due.toISOString().slice(0, 10);
-      d.sales.push(sale);
-      audit(d, 'Sale recorded', `${invoice} — ${sale.customerName}`);
+    addSale: async (input: NewSale & { idemKey?: string }) => {
+      const sale = await api.post<Sale>('/sales', { ...input, idemKey: input.idemKey ?? newIdemKey() });
+      await refresh('sales', 'items', 'audit');
       return sale;
-    }),
-    addPayment: (saleId: number, amount: number, method: Method, ref?: string) => mutate((d) => {
-      const s = d.sales.find((x) => x.id === saleId)!;
-      if (amount <= 0) throw new Error('Enter an amount above zero.');
-      if (amount > saleBalance(s)) throw new Error('Payment is more than the balance owed.');
-      const receiptNo = nextReceiptNo(d);
-      s.payments.push({ id: Date.now(), date: now(), amount, method, ref, receiptNo });
-      audit(d, 'Payment received', `${receiptNo} for ${s.invoice} — ${amount.toLocaleString()} via ${method}`);
-      return receiptNo;
-    }),
-    cancelSale: (saleId: number, reason: string) => mutate((d) => {
-      const s = d.sales.find((x) => x.id === saleId)!;
-      s.status = 'cancelled';
-      s.notes = [s.notes, `Cancelled: ${reason}`].filter(Boolean).join(' | ');
-      s.lines.forEach((l) => stockIn(d, l.itemId, l.qty, l.cost, 'Sale cancelled — restocked', s.invoice));
-      audit(d, 'Sale cancelled', `${s.invoice} — ${reason}`);
-    }),
+    },
+    addPayment: async (saleId: number, amount: number, method: Method, ref?: string, idemKey?: string) => {
+      const r = await api.post<{ receiptNo: string }>(`/sales/${saleId}/payments`, { amount, method, ref, idemKey: idemKey ?? newIdemKey() });
+      await refresh('sales', 'audit');
+      return r.receiptNo;
+    },
+    cancelSale: async (saleId: number, reason: string) => {
+      await api.post(`/sales/${saleId}/cancel`, { reason });
+      await refresh('sales', 'items', 'audit');
+    },
+    updateSale: async (saleId: number, d: { salesperson?: string; delivery?: string; notes?: string }) => {
+      await api.put(`/sales/${saleId}`, d);
+      await refresh('sales', 'audit');
+    },
 
     saveItem: async (item: Item) => {
       if (item.id) await api.put(`/items/${item.id}`, item);

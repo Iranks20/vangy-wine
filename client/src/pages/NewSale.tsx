@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../lib/store';
+import { newIdemKey } from '../lib/api';
+import { Link } from 'react-router-dom';
 import { methodLabel, ugx } from '../lib/format';
-import { Button, Card, Field, Input, PageHeader, Select, Textarea, cx, useToast } from '../components/ui';
+import { Button, Card, Empty, Field, Input, PageHeader, Select, Textarea, cx, useToast } from '../components/ui';
 import type { Method } from '../lib/types';
 
 type Line = { itemId: number; qty: number; price: number; discount: number };
@@ -23,6 +25,8 @@ export default function NewSale() {
   const [paidInput, setPaidInput] = useState<string | null>(null);
   const [delivery, setDelivery] = useState('');
   const [notes, setNotes] = useState('');
+  const [idemKey] = useState(newIdemKey);
+  const [busy, setBusy] = useState(false);
   const [date, setDate] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); });
 
   const total = lines.reduce((t, l) => t + l.qty * l.price - l.discount, 0);
@@ -31,16 +35,25 @@ export default function NewSale() {
   const update = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   const save = async () => {
+    if (busy) return;
+    setBusy(true);
     try {
       const cust = db.customers.find((c) => c.id === customerId);
       const sale = await addSale({
         salesperson, customerId: cust?.id, customerName: cust?.name ?? walkName, customerPhone: cust?.phone ?? walkPhone,
-        lines, paid, method, delivery, notes, date: new Date(date).toISOString(),
+        lines, paid, method, delivery, notes, date: new Date(date).toISOString(), idemKey,
       });
       toast.success(`Sale ${sale.invoice} saved`);
       nav(`/sales/${sale.id}`, { replace: true });
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
+
+  if (!products.length) return (
+    <>
+      <PageHeader title="New sale" />
+      <Empty title="No products to sell yet" text="Add your finished products (for example the 750ml and 1.5L bottles) in Inventory first." action={<Link to="/inventory" className="text-sm font-medium text-wine-700 hover:underline">Go to Inventory</Link>} />
+    </>
+  );
 
   return (
     <>
@@ -132,7 +145,7 @@ export default function NewSale() {
               <div className={cx('flex justify-between font-semibold', balance > 0 ? 'text-red-600' : 'text-stone-500')}><dt>Balance (credit)</dt><dd>{ugx(balance)}</dd></div>
             </dl>
             {balance > 0 && !customerId && <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">Choose a registered customer to sell on credit or take a part-payment.</p>}
-            <Button className="mt-4 w-full" onClick={save} disabled={total <= 0}>Save sale</Button>
+            <Button className="mt-4 w-full" onClick={save} disabled={total <= 0 || busy}>{busy ? 'Saving…' : 'Save sale'}</Button>
             <Button variant="secondary" className="mt-2 w-full" onClick={() => nav(-1)}>Cancel</Button>
           </Card>
         </div>

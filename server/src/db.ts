@@ -14,11 +14,27 @@ export function connectionConfig(database?: string | null) {
 }
 
 export function createDb(database?: string): Db {
-  return knex({ client: 'mysql2', connection: connectionConfig(database) as unknown as Knex.MySql2ConnectionConfig, pool: { min: 0, max: 10 } });
+  return knex({
+    client: 'mysql2',
+    connection: connectionConfig(database) as unknown as Knex.MySql2ConnectionConfig,
+    pool: {
+      min: 0, max: 10,
+      // Every connection uses InnoDB and strict mode, whatever the server's own defaults are.
+      afterCreate: (conn: { query: (sql: string, cb: (err: Error | null) => void) => void }, done: (err: Error | null, c: unknown) => void) =>
+        conn.query("SET SESSION default_storage_engine = 'InnoDB', SESSION sql_mode = 'STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO'", (err) => done(err, conn)),
+    },
+  });
 }
 
 export async function migrateLatest(db: Db) {
   return db.migrate.latest({ migrationSource });
+}
+
+// Refuses to run on tables that cannot do transactions.
+export async function assertInnoDb(db: Db) {
+  const [rows] = await db.raw("SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' AND ENGINE <> 'InnoDB' AND TABLE_NAME NOT LIKE 'knex_%'");
+  const bad = (rows as { t: string }[]).map((r) => r.t);
+  if (bad.length) throw new Error(`These tables are not InnoDB, so transactions would not work: ${bad.join(', ')}. Recreate the database.`);
 }
 
 // Creates the database if it does not exist (local development / tests; Railway provides its own).

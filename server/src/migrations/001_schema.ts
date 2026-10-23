@@ -5,8 +5,13 @@ import { DEFAULT_SETTINGS } from '../defaults';
 // timestamps = DATETIME(3) in UTC. Financial records are never deleted — they are cancelled or voided.
 const METHODS = ['cash', 'mobile_money', 'bank'];
 
+// InnoDB is required: it gives transactions (a sale either fully saves or not at all) and foreign keys.
+// Some MySQL installs (e.g. XAMPP) default to MyISAM, which silently ignores both.
+const innodb = (t: Knex.CreateTableBuilder) => { t.engine('InnoDB'); t.charset('utf8mb4'); t.collate('utf8mb4_unicode_ci'); };
+
 export async function up(knex: Knex) {
   await knex.schema.createTable('users', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('username', 60).notNullable().unique();
     t.string('name', 120).notNullable();
@@ -16,12 +21,14 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('settings', (t) => {
+    innodb(t);
     t.tinyint('id').primary();
     t.json('data').notNullable();
     t.dateTime('last_backup_at', { precision: 3 });
   });
 
   await knex.schema.createTable('audit_log', (t) => {
+    innodb(t);
     t.bigIncrements('id');
     t.dateTime('at', { precision: 3 }).notNullable().index();
     t.string('user_name', 120).notNullable();
@@ -30,11 +37,13 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('counters', (t) => {
+    innodb(t);
     t.string('name', 30).primary();
     t.integer('value').unsigned().notNullable();
   });
 
   await knex.schema.createTable('suppliers', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('name', 150).notNullable();
     t.string('contact', 120).notNullable().defaultTo('');
@@ -45,6 +54,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('customers', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('name', 150).notNullable();
     t.string('phone', 40).notNullable().defaultTo('');
@@ -57,6 +67,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('employees', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('name', 120).notNullable();
     t.string('phone', 40).notNullable().defaultTo('');
@@ -66,6 +77,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('items', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('code', 40).notNullable().unique();
     t.string('name', 150).notNullable();
@@ -80,6 +92,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('lots', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('item_id').unsigned().notNullable().references('items.id');
     t.string('lot_no', 40).notNullable();
@@ -91,6 +104,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('stock_movements', (t) => {
+    innodb(t);
     t.bigIncrements('id');
     t.dateTime('at', { precision: 3 }).notNullable();
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -105,6 +119,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('sales', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('invoice', 30).notNullable().unique();
     t.dateTime('date', { precision: 3 }).notNullable().index();
@@ -122,6 +137,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('sale_lines', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('sale_id').unsigned().notNullable().references('sales.id');
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -133,6 +149,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('payments', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('receipt_no', 30).notNullable().unique();
     t.integer('sale_id').unsigned().notNullable().references('sales.id');
@@ -144,6 +161,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('purchases', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('po', 30).notNullable().unique();
     t.integer('supplier_id').unsigned().notNullable().references('suppliers.id');
@@ -155,6 +173,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('purchase_lines', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('purchase_id').unsigned().notNullable().references('purchases.id');
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -164,6 +183,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('purchase_payments', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('purchase_id').unsigned().notNullable().references('purchases.id');
     t.dateTime('date', { precision: 3 }).notNullable();
@@ -172,12 +192,14 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('recipes', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('name', 150).notNullable();
     t.decimal('base_litres', 10, 2).notNullable();
   });
 
   await knex.schema.createTable('recipe_lines', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('recipe_id').unsigned().notNullable().references('recipes.id').onDelete('CASCADE');
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -185,6 +207,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('batches', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('batch_no', 30).notNullable().unique();
     t.dateTime('start_date', { precision: 3 }).notNullable();
@@ -199,6 +222,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('batch_materials', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('batch_id').unsigned().notNullable().references('batches.id');
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -207,6 +231,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('batch_stages', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('batch_id').unsigned().notNullable().references('batches.id');
     t.string('stage', 40).notNullable();
@@ -215,6 +240,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('batch_outputs', (t) => {
+    innodb(t);
     t.increments('id');
     t.integer('batch_id').unsigned().notNullable().references('batches.id');
     t.integer('item_id').unsigned().notNullable().references('items.id');
@@ -224,6 +250,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('expenses', (t) => {
+    innodb(t);
     t.increments('id');
     t.string('ref', 30).notNullable().unique();
     t.dateTime('date', { precision: 3 }).notNullable().index();
@@ -238,6 +265,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('expense_attachments', (t) => {
+    innodb(t);
     t.integer('expense_id').unsigned().primary().references('expenses.id');
     t.string('filename', 200).notNullable();
     t.string('mime', 100).notNullable();
@@ -245,6 +273,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('cash_entries', (t) => {
+    innodb(t);
     t.increments('id');
     t.dateTime('date', { precision: 3 }).notNullable().index();
     t.enum('direction', ['in', 'out']).notNullable();
@@ -255,6 +284,7 @@ export async function up(knex: Knex) {
   });
 
   await knex.schema.createTable('reconciliations', (t) => {
+    innodb(t);
     t.increments('id');
     t.dateTime('date', { precision: 3 }).notNullable();
     t.enum('method', METHODS).notNullable();
