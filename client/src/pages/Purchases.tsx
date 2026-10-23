@@ -13,7 +13,10 @@ export default function Purchases() {
   const run = useRun();
   const toast = useToast();
   const [newOpen, setNewOpen] = useState(false);
-  const [form, setForm] = useState({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [{ itemId: 4, qty: 1, cost: 0, received: 0 }] });
+  const buyable = db.items.filter((i) => i.category !== 'finished');
+  const blankLine = () => ({ itemId: buyable[0]?.id ?? 0, qty: 1, cost: buyable[0]?.cost ?? 0, received: 0 });
+  const [form, setForm] = useState({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] });
+  const startNew = () => { setForm({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] }); setNewOpen(true); };
   const [openId, setOpenId] = useState<number | null>(null);
   const [recv, setRecv] = useState<number[]>([]);
   const [pay, setPay] = useState({ amount: '', method: 'bank' as Method });
@@ -39,7 +42,7 @@ export default function Purchases() {
   return (
     <>
       <PageHeader title="Purchases" subtitle="Stock only increases when goods are actually received."
-        actions={<Button onClick={() => setNewOpen(true)}><Plus size={16} />New purchase order</Button>} />
+        actions={<Button onClick={startNew}><Plus size={16} />New purchase order</Button>} />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Open orders" value={db.purchases.filter((x) => x.status === 'ordered' || x.status === 'partial').length} tone="gold" />
         <Stat label="Received value" value={ugx(db.purchases.reduce((t, x) => t + purchaseBilled(x), 0))} />
@@ -49,7 +52,8 @@ export default function Purchases() {
       <DataTable rows={[...db.purchases].reverse()} columns={cols} onRowClick={openPo} />
 
       <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New purchase order" wide
-        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={save}>Create order</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={save} disabled={!db.suppliers.length || !buyable.length}>Create order</Button></>}>
+        {(!db.suppliers.length || !buyable.length) && <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">First add {!db.suppliers.length ? 'a supplier (Suppliers page)' : ''}{!db.suppliers.length && !buyable.length ? ' and ' : ''}{!buyable.length ? 'a raw material or packaging item (Inventory page)' : ''}.</p>}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Supplier"><Select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: Number(e.target.value) })}>{db.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
           <Field label="Supplier invoice no."><Input value={form.supplierInvoice} onChange={(e) => setForm({ ...form, supplierInvoice: e.target.value })} /></Field>
@@ -58,13 +62,13 @@ export default function Purchases() {
         <div className="mt-4 space-y-2">
           {form.lines.map((l, i) => (
             <div key={i} className="grid grid-cols-[1fr_5rem_7rem_auto] items-end gap-2">
-              <Field label={i ? '' : 'Item'}><Select value={l.itemId} onChange={(e) => setForm({ ...form, lines: form.lines.map((x, j) => (j === i ? { ...x, itemId: Number(e.target.value), cost: item(Number(e.target.value)).cost } : x)) })}>{db.items.filter((x) => x.category !== 'finished').map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></Field>
+              <Field label={i ? '' : 'Item'}><Select value={l.itemId} onChange={(e) => setForm({ ...form, lines: form.lines.map((x, j) => (j === i ? { ...x, itemId: Number(e.target.value), cost: item(Number(e.target.value)).cost } : x)) })}>{buyable.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></Field>
               <Field label={i ? '' : 'Qty'}><Input type="number" value={l.qty} onChange={(e) => setForm({ ...form, lines: form.lines.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)) })} /></Field>
               <Field label={i ? '' : 'Unit cost'}><Input type="number" value={l.cost} onChange={(e) => setForm({ ...form, lines: form.lines.map((x, j) => (j === i ? { ...x, cost: Number(e.target.value) } : x)) })} /></Field>
               <button className="rounded-lg p-2.5 text-stone-400 hover:text-red-600 disabled:opacity-30" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, j) => j !== i) })} aria-label="Remove"><Trash2 size={18} /></button>
             </div>
           ))}
-          <Button size="sm" variant="ghost" onClick={() => setForm({ ...form, lines: [...form.lines, { itemId: 5, qty: 1, cost: item(5).cost, received: 0 }] })}><Plus size={16} />Add item</Button>
+          <Button size="sm" variant="ghost" onClick={() => setForm({ ...form, lines: [...form.lines, blankLine()] })}><Plus size={16} />Add item</Button>
           <p className="text-right font-semibold">Total: {ugx(form.lines.reduce((t, l) => t + l.qty * l.cost, 0) + Number(form.transport))}</p>
         </div>
       </Modal>

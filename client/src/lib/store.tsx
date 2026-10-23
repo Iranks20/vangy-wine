@@ -6,7 +6,7 @@ import { api, newIdemKey, setUnauthorizedHandler, token } from './api';
 import type {
   Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
 } from './types';
-import { batchCost, batchGoodUnits, purchasePaid, purchaseTotal } from '../../../shared/calc';
+import { batchCost, batchGoodUnits } from '../../../shared/calc';
 
 export * from '../../../shared/calc';
 
@@ -23,6 +23,8 @@ const API_RESOURCES = {
   suppliers: '/suppliers',
   employees: '/employees',
   sales: '/sales',
+  movements: '/movements',
+  purchases: '/purchases',
 } satisfies Partial<Record<keyof Db, string>>;
 type ApiKey = keyof typeof API_RESOURCES;
 
@@ -101,7 +103,7 @@ function useStoreState() {
 
     addSale: async (input: NewSale & { idemKey?: string }) => {
       const sale = await api.post<Sale>('/sales', { ...input, idemKey: input.idemKey ?? newIdemKey() });
-      await refresh('sales', 'items', 'audit');
+      await refresh('sales', 'items', 'movements', 'audit');
       return sale;
     },
     addPayment: async (saleId: number, amount: number, method: Method, ref?: string, idemKey?: string) => {
@@ -111,7 +113,7 @@ function useStoreState() {
     },
     cancelSale: async (saleId: number, reason: string) => {
       await api.post(`/sales/${saleId}/cancel`, { reason });
-      await refresh('sales', 'items', 'audit');
+      await refresh('sales', 'items', 'movements', 'audit');
     },
     updateSale: async (saleId: number, d: { salesperson?: string; delivery?: string; notes?: string }) => {
       await api.put(`/sales/${saleId}`, d);
@@ -121,19 +123,13 @@ function useStoreState() {
     saveItem: async (item: Item) => {
       if (item.id) await api.put(`/items/${item.id}`, item);
       else await api.post('/items', item);
-      await refresh('items', 'audit');
+      await refresh('items', 'movements', 'audit');
     },
-    deleteItem: async (id: number) => { await api.del(`/items/${id}`); await refresh('items', 'audit'); },
-    adjustStock: (itemId: number, kind: 'increase' | 'decrease' | 'damage' | 'expired', qty: number, reason: string) => mutate((d) => {
-      if (qty <= 0) throw new Error('Quantity must be more than zero.');
-      if (!reason.trim()) throw new Error('A reason is required for stock adjustments.');
-      const it = d.items.find((i) => i.id === itemId)!;
-      const ref = `ADJ-${new Date().getFullYear()}-${String(d.movements.length).padStart(4, '0')}`;
-      const label = { increase: 'Adjustment (+)', decrease: 'Adjustment (−)', damage: 'Damaged', expired: 'Expired' }[kind];
-      if (kind === 'increase') stockIn(d, itemId, qty, it.cost, label, ref);
-      else stockOut(d, itemId, qty, label, ref, reason);
-      audit(d, 'Stock adjustment', `${ref} — ${it.name} ${kind} ${qty}: ${reason}`);
-    }),
+    deleteItem: async (id: number) => { await api.del(`/items/${id}`); await refresh('items', 'movements', 'audit'); },
+    adjustStock: async (itemId: number, kind: 'increase' | 'decrease' | 'damage' | 'expired', qty: number, reason: string) => {
+      await api.post('/stock/adjustments', { itemId, kind, qty, reason });
+      await refresh('items', 'movements', 'audit');
+    },
 
     saveCustomer: async (c: Customer) => {
       if (c.id) await api.put(`/customers/${c.id}`, c); else await api.post('/customers', c);
@@ -151,45 +147,23 @@ function useStoreState() {
     },
     deleteEmployee: async (id: number) => { await api.del(`/employees/${id}`); await refresh('employees', 'audit'); },
 
-    addPurchase: (p: Omit<Purchase, 'id' | 'po' | 'payments' | 'status'>) => mutate((d) => {
-      if (!p.lines.length) throw new Error('Add at least one item.');
-      const id = nextId(d.purchases);
-      const po = `PO-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
-      d.purchases.push({ ...p, id, po, payments: [], status: 'ordered' });
-      audit(d, 'Purchase order created', po);
-      return po;
-    }),
-    receivePurchase: (id: number, qtys: number[]) => mutate((d) => {
-      const p = d.purchases.find((x) => x.id === id)!;
-      const goods = p.lines.reduce((t, l) => t + l.qty * l.cost, 0) || 1;
-      let any = false;
-      p.lines.forEach((l, i) => {
-        const q = qtys[i] || 0;
-        if (q < 0) throw new Error('Received quantity cannot be negative.');
-        if (q > l.qty - l.received) throw new Error('Cannot receive more than was ordered.');
-        if (!q) return;
-        any = true;
-        const landed = l.cost + (p.transport * (l.qty * l.cost / goods)) / l.qty; // transport shared by value
-        l.received += q;
-        stockIn(d, l.itemId, q, landed, 'Purchase received', p.po);
-      });
-      if (!any) throw new Error('Enter at least one received quantity.');
-      p.status = p.lines.every((l) => l.received >= l.qty) ? 'received' : 'partial';
-      audit(d, 'Goods received', p.po);
-    }),
-    payPurchase: (id: number, amount: number, method: Method) => mutate((d) => {
-      const p = d.purchases.find((x) => x.id === id)!;
-      if (amount <= 0) throw new Error('Enter an amount above zero.');
-      if (amount > purchaseTotal(p) - purchasePaid(p)) throw new Error('Payment is more than the order value outstanding.');
-      p.payments.push({ id: Date.now(), date: now(), amount, method });
-      audit(d, 'Supplier payment', `${p.po} — ${amount.toLocaleString()}`);
-    }),
-    cancelPurchase: (id: number) => mutate((d) => {
-      const p = d.purchases.find((x) => x.id === id)!;
-      if (p.lines.some((l) => l.received > 0) || p.payments.length) throw new Error('Only orders with nothing received or paid can be cancelled.');
-      p.status = 'cancelled';
-      audit(d, 'Purchase cancelled', p.po);
-    }),
+    addPurchase: async (p: Omit<Purchase, 'id' | 'po' | 'payments' | 'status'>) => {
+      const created = await api.post<Purchase>('/purchases', p);
+      await refresh('purchases', 'audit');
+      return created.po;
+    },
+    receivePurchase: async (id: number, qtys: number[]) => {
+      await api.post(`/purchases/${id}/receive`, { qtys });
+      await refresh('purchases', 'items', 'movements', 'audit');
+    },
+    payPurchase: async (id: number, amount: number, method: Method) => {
+      await api.post(`/purchases/${id}/pay`, { amount, method });
+      await refresh('purchases', 'audit');
+    },
+    cancelPurchase: async (id: number) => {
+      await api.post(`/purchases/${id}/cancel`);
+      await refresh('purchases', 'audit');
+    },
 
     addBatch: (b: { startDate: string; responsible: string; expectedLitres: number; materials: { itemId: number; qty: number }[] }) => mutate((d) => {
       const id = nextId(d.batches);
