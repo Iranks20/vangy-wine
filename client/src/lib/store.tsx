@@ -1,7 +1,7 @@
 // App data store. Records come from the Vangy Wine API; every change is sent to the server,
 // which applies the business rules, and the affected records are then reloaded.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { buildDemoDb } from './mock';
+import { DEFAULT_SETTINGS } from '../../../shared/defaults';
 import { api, setUnauthorizedHandler, token } from './api';
 import type {
   Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
@@ -22,11 +22,20 @@ const nextReceiptNo = (d: Db) => {
 const API_RESOURCES = {
   settings: '/settings',
   audit: '/audit',
+  items: '/items',
+  customers: '/customers',
+  suppliers: '/suppliers',
+  employees: '/employees',
 } satisfies Partial<Record<keyof Db, string>>;
 type ApiKey = keyof typeof API_RESOURCES;
 
+const emptyDb = (): Db => ({
+  account: { name: '', username: '' }, settings: DEFAULT_SETTINGS, items: [], movements: [], customers: [], suppliers: [],
+  sales: [], purchases: [], batches: [], expenses: [], cash: [], employees: [], audit: [], recipes: [], reconciliations: [],
+});
+
 function useStoreState() {
-  const [db, setDb] = useState<Db>(() => buildDemoDb());
+  const [db, setDb] = useState<Db>(emptyDb);
   const [user, setUser] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -83,7 +92,7 @@ function useStoreState() {
       await refresh();
       setUser(r.user);
     },
-    logout: () => { token.set(null); setUser(null); },
+    logout: () => { token.set(null); setUser(null); setDb(emptyDb()); },
     updateAccount: async (a: Account) => {
       setUser(await api.put<Account>('/auth/profile', a));
       await refresh('audit');
@@ -137,20 +146,12 @@ function useStoreState() {
       audit(d, 'Sale cancelled', `${s.invoice} — ${reason}`);
     }),
 
-    saveItem: (item: Item) => mutate((d) => {
-      if (d.items.some((i) => i.code.toLowerCase() === item.code.toLowerCase() && i.id !== item.id)) throw new Error('That item code is already used.');
-      const idx = d.items.findIndex((i) => i.id === item.id);
-      if (idx >= 0) {
-        if (d.items[idx].price !== item.price) audit(d, 'Price changed', `${item.name}: ${d.items[idx].price.toLocaleString()} → ${item.price.toLocaleString()}`);
-        d.items[idx] = { ...d.items[idx], ...item, qty: d.items[idx].qty, lots: d.items[idx].lots };
-      } else {
-        const id = nextId(d.items);
-        const opening = item.qty;
-        d.items.push({ ...item, id, qty: 0, lots: [] });
-        if (opening > 0) stockIn(d, id, opening, item.cost, 'Opening stock', 'OPENING');
-        audit(d, 'Item created', item.name);
-      }
-    }),
+    saveItem: async (item: Item) => {
+      if (item.id) await api.put(`/items/${item.id}`, item);
+      else await api.post('/items', item);
+      await refresh('items', 'audit');
+    },
+    deleteItem: async (id: number) => { await api.del(`/items/${id}`); await refresh('items', 'audit'); },
     adjustStock: (itemId: number, kind: 'increase' | 'decrease' | 'damage' | 'expired', qty: number, reason: string) => mutate((d) => {
       if (qty <= 0) throw new Error('Quantity must be more than zero.');
       if (!reason.trim()) throw new Error('A reason is required for stock adjustments.');
@@ -162,21 +163,21 @@ function useStoreState() {
       audit(d, 'Stock adjustment', `${ref} — ${it.name} ${kind} ${qty}: ${reason}`);
     }),
 
-    saveCustomer: (c: Customer) => mutate((d) => {
-      const idx = d.customers.findIndex((x) => x.id === c.id);
-      if (idx >= 0) d.customers[idx] = c; else d.customers.push({ ...c, id: nextId(d.customers) });
-      audit(d, idx >= 0 ? 'Customer updated' : 'Customer added', c.name);
-    }),
-    saveSupplier: (s: Supplier) => mutate((d) => {
-      const idx = d.suppliers.findIndex((x) => x.id === s.id);
-      if (idx >= 0) d.suppliers[idx] = s; else d.suppliers.push({ ...s, id: nextId(d.suppliers) });
-      audit(d, idx >= 0 ? 'Supplier updated' : 'Supplier added', s.name);
-    }),
-    saveEmployee: (e: Employee) => mutate((d) => {
-      const idx = d.employees.findIndex((x) => x.id === e.id);
-      if (idx >= 0) d.employees[idx] = e; else d.employees.push({ ...e, id: nextId(d.employees) });
-      audit(d, idx >= 0 ? 'Employee updated' : 'Employee added', `${e.name} (${e.position})`);
-    }),
+    saveCustomer: async (c: Customer) => {
+      if (c.id) await api.put(`/customers/${c.id}`, c); else await api.post('/customers', c);
+      await refresh('customers', 'audit');
+    },
+    deleteCustomer: async (id: number) => { await api.del(`/customers/${id}`); await refresh('customers', 'audit'); },
+    saveSupplier: async (s: Supplier) => {
+      if (s.id) await api.put(`/suppliers/${s.id}`, s); else await api.post('/suppliers', s);
+      await refresh('suppliers', 'audit');
+    },
+    deleteSupplier: async (id: number) => { await api.del(`/suppliers/${id}`); await refresh('suppliers', 'audit'); },
+    saveEmployee: async (e: Employee) => {
+      if (e.id) await api.put(`/employees/${e.id}`, e); else await api.post('/employees', e);
+      await refresh('employees', 'audit');
+    },
+    deleteEmployee: async (id: number) => { await api.del(`/employees/${id}`); await refresh('employees', 'audit'); },
 
     addPurchase: (p: Omit<Purchase, 'id' | 'po' | 'payments' | 'status'>) => mutate((d) => {
       if (!p.lines.length) throw new Error('Add at least one item.');

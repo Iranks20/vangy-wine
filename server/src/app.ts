@@ -8,6 +8,7 @@ import { requireAuth } from './services/auth';
 import type { Ctx } from './routes/context';
 import { authRoutes } from './routes/auth';
 import { auditRoutes, settingsRoutes } from './routes/settings';
+import { masterRoutes } from './routes/master';
 
 export function createApp(getDb: () => Db) {
   const app = express();
@@ -26,6 +27,7 @@ export function createApp(getDb: () => Db) {
   app.use('/api/auth', authRoutes(ctx));
   app.use('/api/settings', settingsRoutes(ctx));
   app.use('/api/audit', auditRoutes(ctx));
+  app.use('/api', masterRoutes(ctx));
 
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found.' }); });
   app.use(errorHandler);

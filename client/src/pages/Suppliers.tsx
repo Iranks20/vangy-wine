@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { Mail, Phone, Plus } from 'lucide-react';
 import { purchaseBalance, purchasePaid, purchaseTotal, useStore } from '../lib/store';
 import { fmtDate, ugx } from '../lib/format';
-import { Badge, Button, Field, Input, Modal, PageHeader, useRun } from '../components/ui';
+import { Badge, Button, Field, Input, Modal, PageHeader, useRun, useToast } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
 import type { Supplier } from '../lib/types';
 
 const blank: Supplier = { id: 0, name: '', contact: '', phone: '', email: '', supplies: '' };
 
 export default function Suppliers() {
-  const { db, saveSupplier } = useStore();
+  const { db, saveSupplier, deleteSupplier } = useStore();
   const run = useRun();
+  const toast = useToast();
   const [edit, setEdit] = useState<Supplier | null>(null);
   const [view, setView] = useState<Supplier | null>(null);
   const pos = (id: number) => db.purchases.filter((p) => p.supplierId === id && p.status !== 'cancelled');
@@ -47,7 +48,7 @@ export default function Suppliers() {
       </Modal>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit supplier' : 'New supplier'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Supplier name is required.'); }, ''); run(() => saveSupplier(edit!), 'Supplier saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
+        footer={<>{edit?.id ? <Button variant="ghost" className="mr-auto text-red-600" onClick={async () => { if (await toast.confirm({ title: `Delete ${edit.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteSupplier(edit.id), 'Supplier deleted').then((ok) => ok && setEdit(null)); }}>Delete</Button> : null}<Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Supplier name is required.'); }, ''); run(() => saveSupplier(edit!), 'Supplier saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Contact person"><Input value={edit.contact} onChange={(e) => setEdit({ ...edit, contact: e.target.value })} /></Field>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Phone, Plus, Printer } from 'lucide-react';
 import { saleBalance, salePaid, saleStatus, saleTotal, useStore } from '../lib/store';
 import { customerTypeLabel, fmtDate, ugx } from '../lib/format';
-import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Textarea, useRun } from '../components/ui';
+import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Textarea, useRun, useToast } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
 import { StatusBadge } from './Dashboard';
 import type { Customer, CustomerType } from '../lib/types';
@@ -11,8 +11,9 @@ import type { Customer, CustomerType } from '../lib/types';
 const blank: Customer = { id: 0, name: '', phone: '', type: 'retail', location: '', terms: 0 };
 
 export default function Customers() {
-  const { db, saveCustomer } = useStore();
+  const { db, saveCustomer, deleteCustomer } = useStore();
   const run = useRun();
+  const toast = useToast();
   const [edit, setEdit] = useState<Customer | null>(null);
   const [view, setView] = useState<Customer | null>(null);
   const sales = (id: number) => db.sales.filter((s) => s.customerId === id && s.status === 'completed');
@@ -69,7 +70,7 @@ export default function Customers() {
       </Modal>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit customer' : 'New customer'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Customer name is required.'); }, ''); run(() => saveCustomer(edit!), 'Customer saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
+        footer={<>{edit?.id ? <Button variant="ghost" className="mr-auto text-red-600" onClick={async () => { if (await toast.confirm({ title: `Delete ${edit.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteCustomer(edit.id), 'Customer deleted').then((ok) => ok && setEdit(null)); }}>Delete</Button> : null}<Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Customer name is required.'); }, ''); run(() => saveCustomer(edit!), 'Customer saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Phone"><Input value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>

@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { Download, Plus, Printer, SlidersHorizontal } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { categoryLabel, downloadCsv, fmtDate, fmtDateTime, num, ugx } from '../lib/format';
-import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, useRun } from '../components/ui';
+import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, useRun, useToast } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
 import type { Item, ItemCategory, Movement } from '../lib/types';
 
 const blank: Item = { id: 0, code: '', name: '', category: 'raw', unit: 'kg', price: 0, cost: 0, qty: 0, min: 0, location: '', lots: [] };
 
 export default function Inventory() {
-  const { db, saveItem, adjustStock } = useStore();
+  const { db, saveItem, adjustStock, deleteItem } = useStore();
   const run = useRun();
+  const toast = useToast();
   const [tab, setTab] = useState<'items' | 'moves' | 'count'>('items');
   const [cat, setCat] = useState<'' | ItemCategory>('');
   const [edit, setEdit] = useState<Item | null>(null);
@@ -111,7 +112,7 @@ export default function Inventory() {
 
       {/* add / edit item */}
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit item' : 'New stock item'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); run(() => saveItem(edit!), 'Item saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
+        footer={<>{edit?.id ? <Button variant="ghost" className="mr-auto text-red-600" onClick={async () => { if (await toast.confirm({ title: `Delete ${edit.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteItem(edit.id), 'Item deleted').then((ok) => ok && setEdit(null)); }}>Delete</Button> : null}<Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); run(() => saveItem(edit!), 'Item saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Code"><Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>

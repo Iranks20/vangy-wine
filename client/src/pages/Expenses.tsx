@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Download, Plus } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../lib/store';
-import { EXPENSE_CATEGORIES } from '../lib/mock';
+import { EXPENSE_CATEGORIES } from '../../../shared/defaults';
 import { downloadCsv, fmtDate, methodLabel, today, ugx } from '../lib/format';
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, useRun, useToast } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
