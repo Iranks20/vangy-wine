@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { idParam, notFound, parse } from '../lib/http';
+import { badRequest, idParam, notFound, parse } from '../lib/http';
 import { audit, nextNumber } from '../lib/util';
 import { currentUser } from '../services/auth';
-import { cancelPurchase, createPurchase, loadPurchases, payPurchase, receivePurchase } from '../services/purchases';
+import { cancelPurchase, createPurchase, loadPurchases, payPurchase, receivePurchase, updatePurchase, voidPurchasePayment } from '../services/purchases';
 import { loadItems, loadMovements } from '../services/repo';
 import { stockIn, stockOut } from '../services/stock';
 import type { Ctx } from './context';
@@ -42,19 +42,30 @@ export function inventoryRoutes({ db, auth }: Ctx) {
   // ---- purchases ----
   r.get('/purchases', async (_req, res) => { res.json(await loadPurchases(db())); });
 
+  const orderSchema = z.object({
+    supplierId: z.coerce.number().int().positive('Choose a supplier.'),
+    supplierInvoice: z.string().trim().max(60).optional(),
+    transport: shillings('Transport & other costs').default(0),
+    date: z.string().optional(),
+    lines: z.array(z.object({
+      itemId: z.coerce.number().int().positive('Choose an item.'),
+      qty: z.coerce.number().positive('Quantity must be more than zero.'),
+      cost: shillings('Unit cost'),
+    })).min(1, 'Add at least one item.').max(100),
+  });
   r.post('/purchases', async (req, res) => {
-    const b = parse(z.object({
-      supplierId: z.coerce.number().int().positive('Choose a supplier.'),
-      supplierInvoice: z.string().trim().max(60).optional(),
-      transport: shillings('Transport & other costs').default(0),
-      date: z.string().optional(),
-      lines: z.array(z.object({
-        itemId: z.coerce.number().int().positive('Choose an item.'),
-        qty: z.coerce.number().positive('Quantity must be more than zero.'),
-        cost: shillings('Unit cost'),
-      })).min(1, 'Add at least one item.').max(100),
-    }), req.body);
-    res.status(201).json(await createPurchase(db(), currentUser(req).name, b));
+    res.status(201).json(await createPurchase(db(), currentUser(req).name, parse(orderSchema, req.body)));
+  });
+
+  r.put('/purchases/:id', async (req, res) => {
+    res.json(await updatePurchase(db(), currentUser(req).name, idParam(req), parse(orderSchema, req.body)));
+  });
+
+  r.post('/purchases/:id/payments/:paymentId/void', async (req, res) => {
+    const b = parse(z.object({ reason: z.string().trim().min(3, 'Give a reason for voiding the payment.').max(500) }), req.body);
+    const paymentId = Number(req.params.paymentId);
+    if (!Number.isInteger(paymentId) || paymentId <= 0) throw badRequest('Invalid payment.');
+    res.json(await voidPurchasePayment(db(), currentUser(req).name, idParam(req), paymentId, b.reason));
   });
 
   r.post('/purchases/:id/receive', async (req, res) => {

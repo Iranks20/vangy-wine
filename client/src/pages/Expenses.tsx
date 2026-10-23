@@ -10,7 +10,8 @@ import { DataTable, type Column } from '../components/DataTable';
 import type { Expense, Method } from '../lib/types';
 
 export default function Expenses() {
-  const { db, addExpense, voidExpense, openAttachment } = useStore();
+  const { db, addExpense, updateExpense, voidExpense, openAttachment } = useStore();
+  const [editId, setEditId] = useState<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const run = useRun();
   const toast = useToast();
@@ -44,7 +45,8 @@ export default function Expenses() {
 
   const save = async () => {
     if (!form.description.trim()) return toast.error('Description is required.');
-    if (await run(() => addExpense({ ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() }, file), 'Expense recorded')) {
+    const body = { ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() };
+    if (await run(() => (editId ? updateExpense(editId, body, file) : addExpense(body, file)), editId ? 'Expense updated' : 'Expense recorded')) {
       setOpen(false); setFile(null); setForm({ ...form, description: '', amount: '', recipient: '', reference: '' });
     }
   };
@@ -54,7 +56,7 @@ export default function Expenses() {
       <PageHeader title="Expenses" subtitle="Operating costs, paid from cash, mobile money or bank."
         actions={<>
           <Button variant="secondary" onClick={() => downloadCsv('expenses.csv', ['Ref', 'Date', 'Category', 'Description', 'Paid to', 'Method', 'Amount', 'Status'], rows.map((e) => [e.ref, fmtDate(e.date), e.category, e.description, e.recipient, methodLabel[e.method], e.amount, e.status]))}><Download size={16} />Export</Button>
-          <Button onClick={() => setOpen(true)}><Plus size={16} />Record expense</Button>
+          <Button onClick={() => { setEditId(null); setFile(null); setForm({ date: today(), category: EXPENSE_CATEGORIES[0], description: '', amount: '', method: 'cash', recipient: '', reference: '' }); setOpen(true); }}><Plus size={16} />Record expense</Button>
         </>} />
 
       <div className="mb-4 grid gap-4 lg:grid-cols-3">
@@ -73,12 +75,12 @@ export default function Expenses() {
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
             <Select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category"><option value="">All categories</option>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
           </div>
-          <DataTable rows={rows} columns={cols} pageSize={8} />
+          <DataTable rows={rows} columns={cols} pageSize={8} onRowClick={(e) => { if (e.status !== 'active') return; setEditId(e.id); setFile(null); setForm({ date: dayOf(e.date), category: e.category, description: e.description, amount: String(e.amount), method: e.method, recipient: e.recipient, reference: e.reference ?? '' }); setOpen(true); }} emptyText="No expenses recorded for this month." />
         </div>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Record expense"
-        footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={save}>Save expense</Button></>}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editId ? `Edit ${db.expenses.find((x) => x.id === editId)?.ref}` : 'Record expense'}
+        footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={save}>{editId ? 'Save changes' : 'Save expense'}</Button></>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Date"><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
           <Field label="Category"><Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>

@@ -9,14 +9,15 @@ import type { Method, Purchase } from '../lib/types';
 const tone = { ordered: 'blue', partial: 'amber', received: 'green', cancelled: 'gray' } as const;
 
 export default function Purchases() {
-  const { db, addPurchase, receivePurchase, payPurchase, cancelPurchase } = useStore();
+  const { db, updatePurchase, voidPurchasePayment, addPurchase, receivePurchase, payPurchase, cancelPurchase } = useStore();
   const run = useRun();
   const toast = useToast();
   const [newOpen, setNewOpen] = useState(false);
   const buyable = db.items.filter((i) => i.category !== 'finished');
   const blankLine = () => ({ itemId: buyable[0]?.id ?? 0, qty: 1, cost: buyable[0]?.cost ?? 0, received: 0 });
   const [form, setForm] = useState({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] });
-  const startNew = () => { setForm({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] }); setNewOpen(true); };
+  const [editId, setEditId] = useState<number | null>(null);
+  const startNew = () => { setEditId(null); setForm({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] }); setNewOpen(true); };
   const [openId, setOpenId] = useState<number | null>(null);
   const [recv, setRecv] = useState<number[]>([]);
   const [pay, setPay] = useState({ amount: '', method: 'bank' as Method });
@@ -35,8 +36,16 @@ export default function Purchases() {
   ];
 
   const openPo = (x: Purchase) => { setOpenId(x.id); setRecv(x.lines.map((l) => l.qty - l.received)); setPay({ amount: String(Math.max(0, purchaseTotal(x) - purchasePaid(x))), method: 'bank' }); };
+  const startEdit = (x: Purchase) => {
+    setEditId(x.id);
+    setForm({ supplierId: x.supplierId, supplierInvoice: x.supplierInvoice ?? '', transport: x.transport, lines: x.lines.map((l) => ({ ...l })) });
+    setOpenId(null); setNewOpen(true);
+  };
+  const live = (x: Purchase) => x.payments.filter((y) => !y.voided);
   const save = async () => {
-    if (await run(() => addPurchase({ supplierId: Number(form.supplierId), supplierInvoice: form.supplierInvoice, transport: Number(form.transport), date: new Date().toISOString(), lines: form.lines.filter((l) => l.qty > 0) }), 'Purchase order created')) setNewOpen(false);
+    const body = { supplierId: Number(form.supplierId), supplierInvoice: form.supplierInvoice, transport: Number(form.transport), date: new Date().toISOString(), lines: form.lines.filter((l) => l.qty > 0) };
+    const ok = editId ? await run(() => updatePurchase(editId, body), 'Purchase order updated') : await run(() => addPurchase(body), 'Purchase order created');
+    if (ok) setNewOpen(false);
   };
 
   return (
@@ -51,8 +60,8 @@ export default function Purchases() {
       </div>
       <DataTable rows={[...db.purchases].reverse()} columns={cols} onRowClick={openPo} />
 
-      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New purchase order" wide
-        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={save} disabled={!db.suppliers.length || !buyable.length}>Create order</Button></>}>
+      <Modal open={newOpen} onClose={() => setNewOpen(false)} title={editId ? `Edit ${db.purchases.find((x) => x.id === editId)?.po}` : 'New purchase order'} wide
+        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={save} disabled={!db.suppliers.length || !buyable.length}>{editId ? 'Save changes' : 'Create order'}</Button></>}>
         {(!db.suppliers.length || !buyable.length) && <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">First add {!db.suppliers.length ? 'a supplier (Suppliers page)' : ''}{!db.suppliers.length && !buyable.length ? ' and ' : ''}{!buyable.length ? 'a raw material or packaging item (Inventory page)' : ''}.</p>}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Supplier"><Select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: Number(e.target.value) })}>{db.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
@@ -97,7 +106,8 @@ export default function Purchases() {
             </table>
             <div className="flex flex-wrap gap-2">
               {p.status !== 'received' && p.status !== 'cancelled' && <Button onClick={() => run(() => receivePurchase(p.id, recv), 'Goods received into stock')}><Truck size={16} />Receive goods</Button>}
-              {p.status === 'ordered' && !p.payments.length && <Button variant="ghost" onClick={async () => { if (await toast.confirm({ title: 'Cancel this order?', text: 'The order stays on record as cancelled.', danger: true })) run(() => cancelPurchase(p.id), 'Order cancelled'); }}>Cancel order</Button>}
+              {p.status === 'ordered' && !live(p).length && !p.lines.some((l) => l.received > 0) && <Button variant="secondary" onClick={() => startEdit(p)}>Edit order</Button>}
+              {p.status === 'ordered' && !live(p).length && <Button variant="ghost" onClick={async () => { if (await toast.confirm({ title: 'Cancel this order?', text: 'The order stays on record as cancelled.', danger: true })) run(() => cancelPurchase(p.id), 'Order cancelled'); }}>Cancel order</Button>}
             </div>
             {p.status !== 'cancelled' && purchaseTotal(p) - purchasePaid(p) > 0 && (
               <div className="flex flex-col gap-2 rounded-xl bg-stone-50 p-3 sm:flex-row sm:items-end">
@@ -106,7 +116,14 @@ export default function Purchases() {
                 <Button onClick={() => run(() => payPurchase(p.id, Number(pay.amount), pay.method), 'Supplier payment recorded')}>Record payment</Button>
               </div>
             )}
-            {p.payments.length > 0 && <div><h3 className="mb-1 text-sm font-semibold">Payments</h3><ul className="divide-y divide-stone-100 text-sm">{p.payments.map((x) => <li key={x.id} className="flex justify-between py-1.5"><span>{fmtDateTime(x.date)} · {methodLabel[x.method]}</span><span className="font-medium">{ugx(x.amount)}</span></li>)}</ul></div>}
+            {p.payments.length > 0 && <div><h3 className="mb-1 text-sm font-semibold">Payments</h3><ul className="divide-y divide-stone-100 text-sm">{p.payments.map((x) => (
+              <li key={x.id} className="flex items-center justify-between gap-3 py-1.5">
+                <span className={x.voided ? 'text-stone-400' : ''}>{fmtDateTime(x.date)} · {methodLabel[x.method]}{x.voided && <> · <Badge tone="red">VOID</Badge>{x.voidReason ? ` ${x.voidReason}` : ''}</>}</span>
+                <span className="flex items-center gap-3">
+                  <span className={x.voided ? 'text-stone-400 line-through' : 'font-medium'}>{ugx(x.amount)}</span>
+                  {!x.voided && <button className="text-xs text-red-600 hover:underline" onClick={async () => { const r = await toast.confirm({ title: 'Void this supplier payment?', text: 'Use this when the payment was entered by mistake. It stays on record marked VOID and the amount is owed again.', danger: true, reason: true, confirmLabel: 'Void payment' }); if (r) run(() => voidPurchasePayment(p.id, x.id, r), 'Payment voided'); }}>Void</button>}
+                </span>
+              </li>))}</ul></div>}
           </div>
         )}
       </Modal>

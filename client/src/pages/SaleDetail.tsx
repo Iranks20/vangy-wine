@@ -4,7 +4,7 @@ import { ArrowLeft, Ban, HandCoins, Pencil, Printer, ReceiptText } from 'lucide-
 import { newIdemKey } from '../lib/api';
 import { saleBalance, useStore } from '../lib/store';
 import { fmtDateTime, methodLabel, ugx } from '../lib/format';
-import { Button, Card, Empty, Field, Input, Modal, Select, Textarea, useRun, useToast } from '../components/ui';
+import { Badge, Button, Card, Empty, Field, Input, Modal, Select, Textarea, useRun, useToast } from '../components/ui';
 import { InvoiceDoc } from '../components/Documents';
 import type { Method } from '../lib/types';
 
@@ -13,7 +13,7 @@ export default function SaleDetail() {
   const { id } = useParams();
   const fromInvoices = useLocation().pathname.startsWith('/invoices');
   const nav = useNavigate();
-  const { db, addPayment, cancelSale, updateSale } = useStore();
+  const { db, addPayment, cancelSale, updateSale, voidPayment } = useStore();
   const run = useRun();
   const toast = useToast();
   const [payOpen, setPayOpen] = useState(false);
@@ -64,11 +64,20 @@ export default function SaleDetail() {
           {s.payments.length ? (
             <ul className="divide-y divide-stone-100 text-sm">
               {s.payments.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/receipts/${p.receiptNo}`} className="flex items-center justify-between gap-2 py-2 hover:text-wine-700">
-                    <div><p className="flex items-center gap-1.5 font-medium"><ReceiptText size={14} />{p.receiptNo}</p><p className="text-xs text-stone-500">{fmtDateTime(p.date)} · {methodLabel[p.method]}</p></div>
-                    <span className="font-semibold text-emerald-700">{ugx(p.amount)}</span>
+                <li key={p.id} className="flex items-center gap-3">
+                  <Link to={`/receipts/${p.receiptNo}`} className={`flex flex-1 items-center justify-between gap-2 py-2 hover:text-wine-700 ${p.voided ? 'opacity-70' : ''}`}>
+                    <div>
+                      <p className="flex items-center gap-1.5 font-medium"><ReceiptText size={14} />{p.receiptNo}{p.voided && <Badge tone="red">VOID</Badge>}</p>
+                      <p className="text-xs text-stone-500">{fmtDateTime(p.date)} · {methodLabel[p.method]}{p.voided && p.voidReason ? ` · ${p.voidReason}` : ''}</p>
+                    </div>
+                    <span className={p.voided ? 'text-stone-400 line-through' : 'font-semibold text-emerald-700'}>{ugx(p.amount)}</span>
                   </Link>
+                  {!p.voided && s.status === 'completed' && (
+                    <button className="text-xs text-red-600 hover:underline" onClick={async () => {
+                      const reason = await toast.confirm({ title: `Void receipt ${p.receiptNo}?`, text: `Use this when the payment was entered by mistake. The receipt stays on record marked VOID and ${ugx(p.amount)} goes back onto the balance.`, danger: true, reason: true, confirmLabel: 'Void receipt' });
+                      if (reason) run(() => voidPayment(s.id, p.id, reason), 'Receipt voided');
+                    }}>Void</button>
+                  )}
                 </li>
               ))}
             </ul>

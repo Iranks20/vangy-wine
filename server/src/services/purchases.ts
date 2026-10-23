@@ -22,7 +22,7 @@ export async function loadPurchases(db: Conn, ids?: number[]): Promise<Purchase[
     id: p.id, po: p.po, supplierId: p.supplier_id, supplierInvoice: opt(p.supplier_invoice), date: iso(p.date)!,
     transport: Number(p.transport), status: p.status,
     lines: lines.filter((l) => l.purchase_id === p.id).map((l) => ({ itemId: l.item_id, qty: Number(l.qty), cost: Number(l.cost), received: Number(l.received) })),
-    payments: pays.filter((x) => x.purchase_id === p.id).map((x) => ({ id: x.id, date: iso(x.date)!, amount: Number(x.amount), method: x.method })),
+    payments: pays.filter((x) => x.purchase_id === p.id).map((x) => ({ id: x.id, date: iso(x.date)!, amount: Number(x.amount), method: x.method, voided: !!x.voided_at, voidReason: opt(x.void_reason) })),
   }));
 }
 
@@ -92,12 +92,42 @@ export async function payPurchase(db: Db, user: string, id: number, amount: numb
   return one(db, id);
 }
 
+export async function updatePurchase(db: Db, user: string, id: number, b: { supplierId: number; supplierInvoice?: string; transport: number; lines: { itemId: number; qty: number; cost: number }[] }) {
+  await db.transaction(async (trx) => {
+    const row = await trx('purchases').where({ id }).forUpdate().first();
+    if (!row) throw notFound('Purchase order');
+    const received = await trx('purchase_lines').where({ purchase_id: id }).andWhere('received', '>', 0).first();
+    const paid = await trx('purchase_payments').where({ purchase_id: id }).whereNull('voided_at').first();
+    if (row.status !== 'ordered' || received || paid) throw conflict('Only orders with nothing received or paid can be edited.');
+    if (!(await trx('suppliers').where({ id: b.supplierId }).first())) throw badRequest('Choose a supplier.');
+    for (const l of b.lines) if (!(await trx('items').where({ id: l.itemId }).first())) throw badRequest('An item on this order no longer exists.');
+    await trx('purchases').where({ id }).update({ supplier_id: b.supplierId, supplier_invoice: b.supplierInvoice?.trim() || null, transport: b.transport });
+    await trx('purchase_lines').where({ purchase_id: id }).delete();
+    await trx('purchase_lines').insert(b.lines.map((l) => ({ purchase_id: id, item_id: l.itemId, qty: l.qty, cost: l.cost })));
+    await audit(trx, user, 'Purchase order edited', row.po);
+  });
+  return one(db, id);
+}
+
+export async function voidPurchasePayment(db: Db, user: string, id: number, paymentId: number, reason: string) {
+  await db.transaction(async (trx) => {
+    const row = await trx('purchases').where({ id }).forUpdate().first();
+    if (!row) throw notFound('Purchase order');
+    const p = await trx('purchase_payments').where({ id: paymentId, purchase_id: id }).first();
+    if (!p) throw notFound('Payment');
+    if (p.voided_at) throw conflict('This payment is already voided.');
+    await trx('purchase_payments').where({ id: p.id }).update({ voided_at: new Date(), void_reason: reason });
+    await audit(trx, user, 'Supplier payment voided', `${row.po} — ${Number(p.amount).toLocaleString()} — ${reason}`);
+  });
+  return one(db, id);
+}
+
 export async function cancelPurchase(db: Db, user: string, id: number) {
   await db.transaction(async (trx) => {
     const row = await trx('purchases').where({ id }).forUpdate().first();
     if (!row) throw notFound('Purchase order');
     const received = await trx('purchase_lines').where({ purchase_id: id }).andWhere('received', '>', 0).first();
-    const paid = await trx('purchase_payments').where({ purchase_id: id }).first();
+    const paid = await trx('purchase_payments').where({ purchase_id: id }).whereNull('voided_at').first();
     if (row.status === 'cancelled') throw conflict('This order is already cancelled.');
     if (received || paid) throw conflict('Only orders with nothing received or paid can be cancelled.');
     await trx('purchases').where({ id }).update({ status: 'cancelled' });

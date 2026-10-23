@@ -132,7 +132,7 @@ export function InvoiceDoc({ sale, settings: s, customer }: { sale: Sale; settin
         <div className="mt-6">
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-500">Payments received</p>
           <table className="w-full text-sm">
-            <tbody className="divide-y divide-stone-100">{sale.payments.map((p) => <tr key={p.id}><td className="py-1 font-mono text-xs">{p.receiptNo}</td><td>{fmtDate(p.date)}</td><td>{methodLabel[p.method]}{p.ref ? ` · ${p.ref}` : ''}</td><td className="text-right">{ugx(p.amount)}</td></tr>)}</tbody>
+            <tbody className="divide-y divide-stone-100">{sale.payments.map((p) => <tr key={p.id} className={p.voided ? 'text-stone-400' : ''}><td className="py-1 font-mono text-xs">{p.receiptNo}{p.voided ? ' (void)' : ''}</td><td>{fmtDate(p.date)}</td><td>{methodLabel[p.method]}{p.ref ? ` · ${p.ref}` : ''}</td><td className={`text-right ${p.voided ? 'line-through' : ''}`}>{ugx(p.amount)}</td></tr>)}</tbody>
           </table>
         </div>
       )}
@@ -154,12 +154,13 @@ export function InvoiceDoc({ sale, settings: s, customer }: { sale: Sale; settin
 
 export function ReceiptDoc({ sale, payment, settings: s }: { sale: Sale; payment: Payment; settings: Settings }) {
   const idx = sale.payments.findIndex((p) => p.id === payment.id);
-  const before = sale.payments.slice(0, idx).reduce((t, p) => t + p.amount, 0);
+  const before = sale.payments.slice(0, idx).reduce((t, p) => t + (p.voided ? 0 : p.amount), 0);
   const total = saleTotal(sale);
-  const after = total - before - payment.amount;
+  const after = total - before - (payment.voided ? 0 : payment.amount);
 
   return (
     <article className="print-area relative mx-auto max-w-2xl overflow-hidden rounded-xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+      {payment.voided && <Stamp text="Void" tone="red" />}
       <Letterhead s={s} title="Receipt" rows={[['Receipt no.', payment.receiptNo], ['Date', fmtDateTime(payment.date)]]} />
 
       <div className="space-y-4 py-6 text-sm">
@@ -167,6 +168,7 @@ export function ReceiptDoc({ sale, payment, settings: s }: { sale: Sale; payment
         <Line label="The sum of"><span className="italic">{amountInWords(payment.amount)}</span></Line>
         <Line label="Being payment for">Invoice <span className="font-semibold">{sale.invoice}</span> dated {fmtDate(sale.date)}</Line>
         <Line label="Payment method">{methodLabel[payment.method]}{payment.ref ? ` — Ref: ${payment.ref}` : ''}</Line>
+        {payment.voided && <Line label="Voided"><span className="font-medium text-red-600">{payment.voidReason || 'Entered by mistake'}</span></Line>}
       </div>
 
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

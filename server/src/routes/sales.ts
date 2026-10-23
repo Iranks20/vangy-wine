@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { idParam, parse } from '../lib/http';
+import { badRequest, idParam, parse } from '../lib/http';
 import { currentUser } from '../services/auth';
-import { addPayment, cancelSale, createSale, loadSales, updateSaleDetails } from '../services/sales';
+import { addPayment, cancelSale, createSale, loadSales, updateSaleDetails, voidPayment } from '../services/sales';
 import type { Ctx } from './context';
 
 const method = z.enum(['cash', 'mobile_money', 'bank'], { errorMap: () => ({ message: 'Choose cash, mobile money or bank.' }) });
@@ -50,6 +50,14 @@ export function salesRoutes({ db, auth }: Ctx) {
     const b = parse(z.object({ amount: shillings('Amount').refine((n) => n > 0, 'Enter an amount above zero.'), method, ref: z.string().trim().max(80).optional(), idemKey: idem }), req.body);
     const receiptNo = await addPayment(db(), currentUser(req).name, idParam(req), b);
     res.status(201).json({ receiptNo });
+  });
+
+  r.post('/:id/payments/:paymentId/void', async (req, res) => {
+    const b = parse(z.object({ reason: z.string().trim().min(3, 'Give a reason for voiding the receipt.').max(500) }), req.body);
+    const paymentId = Number(req.params.paymentId);
+    if (!Number.isInteger(paymentId) || paymentId <= 0) throw badRequest('Invalid receipt.');
+    await voidPayment(db(), currentUser(req).name, idParam(req), paymentId, b.reason);
+    res.json((await loadSales(db(), [idParam(req)]))[0]);
   });
 
   r.post('/:id/cancel', async (req, res) => {

@@ -4,7 +4,9 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { downloadCsv, fmtDate, fmtDateTime, num, today, ugx } from '../lib/format';
 import { Button, Card, Field, Input, PageHeader } from '../components/ui';
-import { REPORT_LIST, type Cell, type Report } from '../../../shared/reports';
+import type { Cell, Report } from '../../../shared/reports';
+
+type ReportInfo = { id: string; title: string; group: string; dated: boolean };
 
 type Result = Report & { id: string; title: string; dated: boolean; generatedAt: string };
 
@@ -16,8 +18,10 @@ export default function Reports() {
   const [report, setReport] = useState<Result | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const def = REPORT_LIST.find((r) => r.id === id);
-  const groups = [...new Set(REPORT_LIST.map((r) => r.group))];
+  const [list, setList] = useState<ReportInfo[] | null>(null);
+  useEffect(() => { api.get<ReportInfo[]>('/reports').then(setList).catch((e) => setError((e as Error).message)); }, []);
+  const def = list?.find((r) => r.id === id);
+  const groups = [...new Set((list ?? []).map((r) => r.group))];
 
   // Reports are calculated by the server from the database; re-run when the period or the data changes.
   useEffect(() => {
@@ -31,14 +35,15 @@ export default function Reports() {
     return () => { live = false; };
   }, [id, from, to, db]);
 
+  if (!list) return <div className="py-16 text-center text-sm text-stone-500">{error || 'Loading…'}</div>;
   if (!def) return (
     <>
-      <PageHeader title="Reports" subtitle={`${REPORT_LIST.length} printable reports. Export to Excel (CSV) or save as PDF.`} />
+      <PageHeader title="Reports" subtitle={`${list.length} printable reports. Export to Excel (CSV) or save as PDF.`} />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {groups.map((g) => (
           <Card key={g} title={g}>
             <ul className="-my-2 divide-y divide-stone-100">
-              {REPORT_LIST.filter((r) => r.group === g).map((r) => (
+              {list.filter((r) => r.group === g).map((r) => (
                 <li key={r.id}><button onClick={() => { setReport(null); setId(r.id); }} className="flex w-full items-center justify-between py-2.5 text-left text-sm hover:text-wine-700">{r.title}<ChevronRight size={16} className="text-stone-400" /></button></li>
               ))}
             </ul>

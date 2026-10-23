@@ -30,7 +30,7 @@ export default function Sales() {
     { key: 'invoice', label: 'Invoice', render: (s) => <span className="font-medium text-wine-700">{s.invoice}</span> },
     { key: 'date', label: 'Date', value: (s) => s.date, render: (s) => fmtDateTime(s.date) },
     { key: 'customerName', label: 'Customer' },
-    { key: 'items', label: 'Items', value: (s) => s.lines.map((l) => `${l.qty}× ${l.name.replace('Vangy Natural Sweet Red Wine', 'Sweet Red')}`).join(', '), hideOnMobile: true },
+    { key: 'items', label: 'Items', value: (s) => s.lines.map((l) => `${l.qty}× ${l.name}`).join(', '), hideOnMobile: true },
     { key: 'total', label: 'Total', align: 'right', value: saleTotal, render: (s) => ugx(saleTotal(s)) },
     { key: 'paid', label: 'Paid', align: 'right', value: salePaid, render: (s) => ugx(salePaid(s)), hideOnMobile: true },
     { key: 'balance', label: 'Balance', align: 'right', value: saleBalance, render: (s) => <span className={saleBalance(s) > 0 ? 'font-semibold text-red-600' : ''}>{ugx(saleBalance(s))}</span> },

@@ -22,7 +22,7 @@ export interface Customer {
 
 export interface Supplier { id: number; name: string; contact: string; phone: string; email: string; supplies: string }
 
-export interface Payment { id: number; date: string; amount: number; method: Method; ref?: string; receiptNo?: string }
+export interface Payment { id: number; date: string; amount: number; method: Method; ref?: string; receiptNo?: string; voided?: boolean; voidReason?: string }
 
 export interface SaleLine { itemId: number; name: string; qty: number; price: number; discount: number; cost: number }
 
@@ -59,6 +59,7 @@ export interface Expense {
 
 export interface CashEntry {
   id: number; date: string; direction: 'in' | 'out'; amount: number; method: Method; description: string; category: string;
+  voided?: boolean; voidReason?: string;
 }
 
 export interface Employee {

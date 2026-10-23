@@ -36,7 +36,7 @@ For development with hot reload: `npm run dev:api` and `npm run dev:web` (http:/
 npm test
 ```
 
-Runs 62 API tests against a **separate** database, `vangy_wine_test`, which is rebuilt on every run —
+Runs 71 API tests against a **separate** database, `vangy_wine_test`, which is rebuilt on every run —
 your real data is never touched. They cover sales totals and discounts, partial and credit payments,
 debt balances, stock deductions and rollback, oversell rules, invoice/receipt numbering, duplicate
 submissions, cancellations, adjustments, purchases and landed cost, production and QC release,
@@ -102,8 +102,9 @@ in the app (Settings → Business → Change password).
   Released production batches become lots named after the batch, with an expiry date.
 - **Production cost per bottle** = everything the batch consumed (ingredients + packaging) ÷ good units.
   A batch only enters saleable stock after it **passes quality check** and is released.
-- **Nothing financial is deleted.** Sales are cancelled (stock returned, refund recorded), expenses are
-  voided, purchase orders cancelled only if nothing was received or paid. Products, customers and
+- **Nothing financial is deleted.** Sales are cancelled (stock returned, refund recorded); mistaken
+  receipts, supplier payments and cashbook entries are voided with a reason (shown as VOID, no longer
+  counted); expenses are edited or voided; purchase orders cancelled only if nothing was received or paid. Products, customers and
   suppliers can only be deleted while they have no transactions.
 - **Audit trail** of every change, with who and when (Settings → Audit trail).
 - **Profit figures are management estimates**, not audited accounts: revenue counts credit sales when
@@ -122,11 +123,11 @@ table is created as InnoDB explicitly and the API refuses to start if any table 
 | Auth | `POST /auth/login`, `GET /auth/me`, `PUT /auth/profile`, `PUT /auth/password` |
 | Settings & audit | `GET/PUT /settings`, `GET /audit` |
 | Master data | `GET/POST/PUT/DELETE /items`, `/customers`, `/suppliers`, `/employees` |
-| Sales | `GET/POST /sales`, `GET/PUT /sales/:id`, `POST /sales/:id/payments`, `POST /sales/:id/cancel` |
+| Sales | `GET/POST /sales`, `GET/PUT /sales/:id`, `POST /sales/:id/payments`, `POST /sales/:id/payments/:pid/void`, `POST /sales/:id/cancel` |
 | Inventory | `GET /movements`, `POST /stock/adjustments` |
-| Purchases | `GET/POST /purchases`, `POST /purchases/:id/receive`, `/pay`, `/cancel` |
-| Production | `GET/POST/PUT/DELETE /recipes`, `GET/POST /batches`, `POST /batches/:id/materials`, `/stages`, `/outputs`, `/qc`, `/release`, `/reject` |
-| Finance | `GET/POST /expenses`, `GET /expenses/:id/attachment`, `POST /expenses/:id/void`, `GET/POST /cash`, `POST /cash/transfer`, `GET/POST /reconciliations` |
+| Purchases | `GET/POST /purchases`, `PUT /purchases/:id`, `POST /purchases/:id/receive`, `/pay`, `/payments/:pid/void`, `/cancel` |
+| Production | `GET/POST/PUT/DELETE /recipes`, `GET/POST /batches`, `PUT /batches/:id`, `POST /batches/:id/materials`, `/stages`, `/outputs`, `/qc`, `/release`, `/reject` |
+| Finance | `GET/POST /expenses`, `PUT /expenses/:id`, `GET /expenses/:id/attachment`, `POST /expenses/:id/void`, `GET/POST /cash`, `POST /cash/:id/void`, `POST /cash/transfer`, `GET/POST /reconciliations`, `DELETE /reconciliations/:id` |
 | Insights | `GET /dashboard?range=`, `GET /reports`, `GET /reports/:id?from=&to=` |
 | Backup | `GET /backup`, `POST /backup/restore` |
 | Health | `GET /health` |

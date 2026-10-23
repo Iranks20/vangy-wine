@@ -115,7 +115,7 @@ export default function Dashboard() {
               const pct = Math.min(100, (i.qty / Math.max(i.min * 3, 1)) * 100);
               return (
                 <li key={i.id}>
-                  <div className="flex justify-between text-sm"><span className="font-medium">{i.name.replace('Vangy Natural Sweet Red Wine', 'Sweet Red')}</span><span className="tabular-nums">{num(i.qty)} {i.unit}s</span></div>
+                  <div className="flex justify-between text-sm"><span className="font-medium">{i.name}</span><span className="tabular-nums">{num(i.qty)} {i.unit}s</span></div>
                   <div className="mt-1.5 h-2 rounded-full bg-stone-100"><div className={`h-2 rounded-full ${i.qty <= i.min ? 'bg-red-500' : 'bg-wine-600'}`} style={{ width: `${pct}%` }} /></div>
                   <p className="mt-1 text-xs text-stone-500">Min level {num(i.min)} · value {ugx(i.value)}</p>
                 </li>
@@ -130,7 +130,7 @@ export default function Dashboard() {
               {best.map((b, i) => (
                 <li key={b.name} className="flex items-center gap-3 text-sm">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-100 text-xs font-bold text-gold-500">{i + 1}</span>
-                  <div className="min-w-0 flex-1"><p className="truncate font-medium">{b.name.replace('Vangy Natural Sweet Red Wine', 'Sweet Red')}</p><p className="text-xs text-stone-500">{num(b.qty)} units sold</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate font-medium">{b.name}</p><p className="text-xs text-stone-500">{num(b.qty)} units sold</p></div>
                   <span className="font-semibold tabular-nums">{shortUgx(b.revenue)}</span>
                 </li>
               ))}

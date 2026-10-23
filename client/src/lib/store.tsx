@@ -36,7 +36,7 @@ const API_RESOURCES = {
   cash: '/cash',
   reconciliations: '/reconciliations',
 } satisfies Partial<Record<keyof Db, string>>;
-type ApiKey = keyof typeof API_RESOURCES;
+export type ApiKey = keyof typeof API_RESOURCES;
 
 const emptyDb = (): Db => ({
   account: { name: '', username: '' }, settings: DEFAULT_SETTINGS, items: [], movements: [], customers: [], suppliers: [],
@@ -47,18 +47,20 @@ function useStoreState() {
   const [db, setDb] = useState<Db>(emptyDb);
   const [user, setUser] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState<Set<ApiKey>>(() => new Set());
 
   const refresh = useCallback(async (...keys: ApiKey[]) => {
     const ks = keys.length ? keys : (Object.keys(API_RESOURCES) as ApiKey[]);
     const data = await Promise.all(ks.map((k) => api.get<unknown>(API_RESOURCES[k])));
     setDb((d) => ({ ...d, ...Object.fromEntries(ks.map((k, i) => [k, data[i]])) }));
+    setLoaded((l) => new Set([...l, ...ks]));
   }, []);
 
   useEffect(() => {
     setUnauthorizedHandler(() => { token.set(null); setUser(null); });
     if (!token.get()) { setReady(true); return; }
     api.get<Account>('/auth/me')
-      .then(async (u) => { setUser(u); await refresh(); })
+      .then(async (u) => { await refresh('settings'); setUser(u); })
       .catch(() => token.set(null))
       .finally(() => setReady(true));
   }, [refresh]);
@@ -67,10 +69,10 @@ function useStoreState() {
     login: async (username: string, password: string) => {
       const r = await api.post<{ token: string; user: Account }>('/auth/login', { username, password });
       token.set(r.token);
-      await refresh();
+      await refresh('settings');
       setUser(r.user);
     },
-    logout: () => { token.set(null); setUser(null); setDb(emptyDb()); },
+    logout: () => { token.set(null); setUser(null); setDb(emptyDb()); setLoaded(new Set()); },
     updateAccount: async (a: Account) => {
       setUser(await api.put<Account>('/auth/profile', a));
       await refresh('audit');
@@ -93,6 +95,10 @@ function useStoreState() {
     cancelSale: async (saleId: number, reason: string) => {
       await api.post(`/sales/${saleId}/cancel`, { reason });
       await refresh('sales', 'items', 'movements', 'audit');
+    },
+    voidPayment: async (saleId: number, paymentId: number, reason: string) => {
+      await api.post(`/sales/${saleId}/payments/${paymentId}/void`, { reason });
+      await refresh('sales', 'audit');
     },
     updateSale: async (saleId: number, d: { salesperson?: string; delivery?: string; notes?: string }) => {
       await api.put(`/sales/${saleId}`, d);
@@ -131,6 +137,14 @@ function useStoreState() {
       await refresh('purchases', 'audit');
       return created.po;
     },
+    updatePurchase: async (id: number, p: Omit<Purchase, 'id' | 'po' | 'payments' | 'status'>) => {
+      await api.put(`/purchases/${id}`, p);
+      await refresh('purchases', 'audit');
+    },
+    voidPurchasePayment: async (id: number, paymentId: number, reason: string) => {
+      await api.post(`/purchases/${id}/payments/${paymentId}/void`, { reason });
+      await refresh('purchases', 'audit');
+    },
     receivePurchase: async (id: number, qtys: number[]) => {
       await api.post(`/purchases/${id}/receive`, { qtys });
       await refresh('purchases', 'items', 'movements', 'audit');
@@ -154,6 +168,10 @@ function useStoreState() {
       await refresh('batches', 'items', 'movements', 'audit');
       return created.batchNo;
     },
+    updateBatch: async (id: number, b: { expectedLitres: number; responsible: string }) => {
+      await api.put(`/batches/${id}`, b);
+      await refresh('batches', 'audit');
+    },
     addBatchMaterials: async (id: number, materials: { itemId: number; qty: number }[]) => {
       await api.post(`/batches/${id}/materials`, { materials });
       await refresh('batches', 'items', 'movements', 'audit');
@@ -175,12 +193,18 @@ function useStoreState() {
       await api.post('/expenses', { ...e, attachment });
       await refresh('expenses', 'audit');
     },
+    updateExpense: async (id: number, e: Omit<Expense, 'id' | 'ref' | 'status'>, file?: File | null) => {
+      const attachment = file ? { filename: file.name, mime: file.type || 'application/octet-stream', data: await fileToBase64(file) } : undefined;
+      await api.put(`/expenses/${id}`, { ...e, attachment });
+      await refresh('expenses', 'audit');
+    },
     voidExpense: async (id: number, reason: string) => { await api.post(`/expenses/${id}/void`, { reason }); await refresh('expenses', 'audit'); },
     openAttachment: async (id: number) => {
       const blob = await api.blob(`/expenses/${id}/attachment`);
       window.open(URL.createObjectURL(blob), '_blank', 'noopener');
     },
     addCash: async (c: Omit<CashEntry, 'id'>) => { await api.post('/cash', c); await refresh('cash', 'audit'); },
+    voidCash: async (id: number, reason: string) => { await api.post(`/cash/${id}/void`, { reason }); await refresh('cash', 'audit'); },
     addTransfer: async (t: { amount: number; from: Method; to: Method; description: string }) => {
       await api.post('/cash/transfer', t);
       await refresh('cash', 'audit');
@@ -190,6 +214,7 @@ function useStoreState() {
       await refresh('reconciliations', 'audit');
     },
 
+    deleteCount: async (id: number) => { await api.del(`/reconciliations/${id}`); await refresh('reconciliations', 'audit'); },
     updateSettings: async (s: Settings) => {
       await api.put('/settings', s);
       await refresh('settings', 'audit');
@@ -209,7 +234,7 @@ function useStoreState() {
     },
   };
 
-  return { db, user, ready, refresh, ...actions };
+  return { db, user, ready, loaded, refresh, ...actions };
 }
 
 type Store = ReturnType<typeof useStoreState>;
@@ -217,7 +242,7 @@ const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const store = useStoreState();
-  const value = useMemo(() => store, [store.db, store.user, store.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  const value = useMemo(() => store, [store.db, store.user, store.ready, store.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

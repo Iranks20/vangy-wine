@@ -1,5 +1,5 @@
 import type { Sale } from '../../../shared/types';
-import { saleBalance, saleTotal } from '../../../shared/calc';
+import { saleBalance, salePaid } from '../../../shared/calc';
 import type { Db, Tx } from '../db';
 import { badRequest, conflict, notFound } from '../lib/http';
 import { audit, iso, nextNumber, opt } from '../lib/util';
@@ -34,7 +34,7 @@ export async function loadSales(db: Conn, ids?: number[]): Promise<Sale[]> {
     customerPhone: opt(s.customer_phone), salesperson: s.salesperson, delivery: opt(s.delivery), notes: opt(s.notes),
     status: s.status, dueDate: opt(s.due_date), cancelledAt: iso(s.cancelled_at),
     lines: lines.filter((l) => l.sale_id === s.id).map((l) => ({ itemId: l.item_id, name: l.name, qty: Number(l.qty), price: Number(l.price), discount: Number(l.discount), cost: Number(l.cost) })),
-    payments: pays.filter((p) => p.sale_id === s.id).map((p) => ({ id: p.id, date: iso(p.date)!, amount: Number(p.amount), method: p.method, ref: opt(p.ref), receiptNo: p.receipt_no })),
+    payments: pays.filter((p) => p.sale_id === s.id).map((p) => ({ id: p.id, date: iso(p.date)!, amount: Number(p.amount), method: p.method, ref: opt(p.ref), receiptNo: p.receipt_no, voided: !!p.voided_at, voidReason: opt(p.void_reason) })),
   }));
 }
 
@@ -122,7 +122,21 @@ export async function cancelSale(db: Db, user: string, saleId: number, reason: s
     }
     const notes = [row.notes, `Cancelled: ${reason}`].filter(Boolean).join(' | ');
     await trx('sales').where({ id: saleId }).update({ status: 'cancelled', cancelled_at: new Date(), notes });
-    await audit(trx, user, 'Sale cancelled', `${sale.invoice} — ${reason}${saleTotal(sale) ? ` — refund ${sale.payments.reduce((t, x) => t + x.amount, 0).toLocaleString()}` : ''}`);
+    await audit(trx, user, 'Sale cancelled', `${sale.invoice} — ${reason}${salePaid(sale) ? ` — refund ${salePaid(sale).toLocaleString()}` : ''}`);
+  });
+}
+
+// A mistaken payment is voided (kept on record with the reason); the invoice balance re-opens.
+export async function voidPayment(db: Db, user: string, saleId: number, paymentId: number, reason: string) {
+  await db.transaction(async (trx) => {
+    const sale = await trx('sales').where({ id: saleId }).forUpdate().first();
+    if (!sale) throw notFound('Sale');
+    if (sale.status === 'cancelled') throw conflict('This sale was cancelled and its refund already worked out, so its receipts cannot be changed.');
+    const p = await trx('payments').where({ id: paymentId, sale_id: saleId }).first();
+    if (!p) throw notFound('Receipt');
+    if (p.voided_at) throw conflict('This receipt is already voided.');
+    await trx('payments').where({ id: p.id }).update({ voided_at: new Date(), void_reason: reason });
+    await audit(trx, user, 'Receipt voided', `${p.receipt_no} for ${sale.invoice} — ${Number(p.amount).toLocaleString()} — ${reason}`);
   });
 }
 

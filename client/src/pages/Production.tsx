@@ -34,7 +34,7 @@ function MaterialRows({ rows, onChange, items, showStock }: { rows: Mat[]; onCha
 }
 
 export default function Production() {
-  const { db, user, addBatch, addBatchMaterials, addStage, recordOutputs, setQc, releaseBatch, rejectBatch, saveRecipe, deleteRecipe } = useStore();
+  const { db, user, addBatch, updateBatch, addBatchMaterials, addStage, recordOutputs, setQc, releaseBatch, rejectBatch, saveRecipe, deleteRecipe } = useStore();
   const run = useRun();
   const toast = useToast();
   const inputs = db.items.filter((i) => i.category !== 'finished');
@@ -59,6 +59,7 @@ export default function Production() {
   const [loss, setLoss] = useState('0');
   const [qcNote, setQcNote] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [editB, setEditB] = useState<{ expectedLitres: string; responsible: string } | null>(null);
   const b = db.batches.find((x) => x.id === openId);
 
   const active = db.batches.filter((x) => x.status === 'in_progress');
@@ -75,7 +76,7 @@ export default function Production() {
     setRecipeId(rid); setLitres('200'); fromRecipe(rid, '200'); setNewOpen(true);
   };
   const open = (x: Batch) => {
-    setOpenId(x.id); setStageNote(''); setQcNote(''); setExtra([]);
+    setOpenId(x.id); setStageNote(''); setQcNote(''); setExtra([]); setEditB(null);
     setNextStage(STAGES[Math.min(STAGES.indexOf(x.stage) + 1, 3)] ?? 'Fermentation');
     setOuts(products.map((p) => x.outputs.find((o) => o.itemId === p.id) ?? { itemId: p.id, good: 0, rejected: 0 }));
     setLoss(String(x.lossLitres));
@@ -122,7 +123,7 @@ export default function Production() {
 
       {tab === 'recipes' && (
         <div className="space-y-4">
-          <div className="flex justify-end"><Button variant="secondary" onClick={() => setRecipe({ id: 0, name: 'Hibiscus Natural Sweet Red Wine', baseLitres: 100, lines: inputs[0] ? [{ itemId: inputs[0].id, qty: 0 }] : [] })}><Plus size={16} />New recipe</Button></div>
+          <div className="flex justify-end"><Button variant="secondary" onClick={() => setRecipe({ id: 0, name: '', baseLitres: 100, lines: inputs[0] ? [{ itemId: inputs[0].id, qty: 0 }] : [] })}><Plus size={16} />New recipe</Button></div>
           {db.recipes.length ? db.recipes.map((r) => (
             <Card key={r.id} title={`${r.name} — per ${r.baseLitres} litres`} action={<Button size="sm" variant="ghost" onClick={() => setRecipe(r)}>Edit</Button>}>
               <table className="w-full text-sm">
@@ -177,6 +178,8 @@ export default function Production() {
                 <div><p className="text-stone-500">Quality check</p><Badge tone={b.qc === 'passed' ? 'green' : b.qc === 'failed' ? 'red' : 'gray'}>{b.qc}</Badge></div>
                 <div><p className="text-stone-500">Expected</p><p className="font-medium">{b.expectedLitres} L</p></div>
                 <div><p className="text-stone-500">Losses</p><p className="font-medium">{b.lossLitres} L</p></div>
+                <div><p className="text-stone-500">Responsible</p><p className="font-medium">{b.responsible}</p></div>
+                <div><p className="text-stone-500">Started</p><p className="font-medium">{fmtDate(b.startDate)}</p></div>
                 <div><p className="text-stone-500">Batch cost</p><p className="font-medium">{ugx(batchCost(b))}</p></div>
                 <div><p className="text-stone-500">Cost / unit</p><p className="font-medium">{batchGoodUnits(b) ? ugx(batchCost(b) / batchGoodUnits(b)) : '—'}</p></div>
               </div>
@@ -188,6 +191,20 @@ export default function Production() {
                 <h3 className="mb-1 text-sm font-semibold">Output</h3>
                 <ul className="divide-y divide-stone-100 text-sm">{b.outputs.map((o) => <li key={o.itemId} className="flex justify-between py-1"><span>{name(o.itemId)}</span><span>{o.good} good{o.rejected ? ` · ${o.rejected} rejected` : ''}</span></li>)}</ul>
               </div>}
+              {b.status === 'in_progress' && (editB ? (
+                <div className="space-y-2 rounded-lg border border-stone-200 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Expected litres"><Input type="number" value={editB.expectedLitres} onChange={(e) => setEditB({ ...editB, expectedLitres: e.target.value })} /></Field>
+                    <Field label="Responsible"><Select value={editB.responsible} onChange={(e) => setEditB({ ...editB, responsible: e.target.value })}>
+                      {[...new Set([editB.responsible, user!.name, ...db.employees.filter((x) => x.active).map((x) => x.name)])].map((n) => <option key={n}>{n}</option>)}
+                    </Select></Field>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => run(() => updateBatch(b.id, { expectedLitres: Number(editB.expectedLitres), responsible: editB.responsible }), 'Batch updated').then((ok) => ok && setEditB(null))}>Save details</Button>
+                    <Button size="sm" variant="secondary" onClick={() => setEditB(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : <Button size="sm" variant="ghost" onClick={() => setEditB({ expectedLitres: String(b.expectedLitres), responsible: b.responsible })}>Edit batch details</Button>)}
               {b.qcNotes && <p className="rounded-lg bg-stone-50 p-2 text-sm"><b>QC notes:</b> {b.qcNotes}</p>}
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Stage history</h3>
@@ -203,7 +220,7 @@ export default function Production() {
                   <div className="space-y-2">
                     <p className="text-sm font-semibold">Move to next stage</p>
                     <div className="flex gap-2"><Select value={nextStage} onChange={(e) => setNextStage(e.target.value)}>{STAGES.slice(0, 4).map((s) => <option key={s}>{s}</option>)}</Select>
-                      <Button size="sm" onClick={() => run(() => addStage(b.id, nextStage, stageNote), `Stage set to ${nextStage}`).then((ok) => ok && setStageNote(''))}>Save</Button></div>
+                      <Button size="sm" onClick={() => run(() => addStage(b.id, nextStage, stageNote), `Stage set to ${nextStage}`).then((ok) => ok && setStageNote(''))}>Save stage</Button></div>
                     <Input placeholder="Readings / notes (e.g. sugar 12 Brix, 24°C)" value={stageNote} onChange={(e) => setStageNote(e.target.value)} />
                   </div>
                   <div className="space-y-2 border-t border-stone-200 pt-3">

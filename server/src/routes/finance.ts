@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { CashEntry, Expense, Reconciliation } from '../../../shared/types';
@@ -30,7 +31,7 @@ export async function loadExpenses(db: Conn): Promise<Expense[]> {
 
 export async function loadCash(db: Conn): Promise<CashEntry[]> {
   const rows = await db('cash_entries').orderBy('date').orderBy('id');
-  return rows.map((c) => ({ id: c.id, date: iso(c.date)!, direction: c.direction, amount: Number(c.amount), method: c.method, description: c.description, category: c.category }));
+  return rows.map((c) => ({ id: c.id, date: iso(c.date)!, direction: c.direction, amount: Number(c.amount), method: c.method, description: c.description, category: c.category, voided: !!c.voided_at, voidReason: opt(c.void_reason) }));
 }
 
 export async function loadReconciliations(db: Conn): Promise<Reconciliation[]> {
@@ -54,8 +55,7 @@ export function financeRoutes({ db, auth }: Ctx) {
   // ---- expenses ----
   r.get('/expenses', async (_req, res) => { res.json(await loadExpenses(db())); });
 
-  r.post('/expenses', async (req, res) => {
-    const b = parse(z.object({
+  const expenseSchema = z.object({
       date: z.string().min(1, 'Date is required.'),
       category: z.string().refine((c) => EXPENSE_CATEGORIES.includes(c), 'Choose an expense category.'),
       description: z.string().trim().min(1, 'Description is required.').max(255),
@@ -63,7 +63,9 @@ export function financeRoutes({ db, auth }: Ctx) {
       recipient: z.string().trim().max(150).default(''),
       reference: z.string().trim().max(80).optional(),
       attachment: z.object({ filename: z.string().max(200), mime: z.string(), data: z.string() }).optional(),
-    }), req.body);
+  });
+  r.post('/expenses', async (req, res) => {
+    const b = parse(expenseSchema, req.body);
     const date = new Date(b.date);
     if (Number.isNaN(date.getTime())) throw badRequest('Date is not valid.');
     let file: Buffer | null = null;
@@ -80,6 +82,29 @@ export function financeRoutes({ db, auth }: Ctx) {
       return eid;
     });
     res.status(201).json((await loadExpenses(db())).find((e) => e.id === id));
+  });
+
+  r.put('/expenses/:id', async (req, res) => {
+    const id = idParam(req);
+    const b = parse(expenseSchema, req.body);
+    const date = new Date(b.date);
+    if (Number.isNaN(date.getTime())) throw badRequest('Date is not valid.');
+    await db().transaction(async (trx) => {
+      const row = await trx('expenses').where({ id }).forUpdate().first();
+      if (!row) throw notFound('Expense');
+      if (row.status === 'voided') throw conflict('A voided expense cannot be edited.');
+      await trx('expenses').where({ id }).update({ date, category: b.category, description: b.description, amount: b.amount, method: b.method, recipient: b.recipient, reference: b.reference || null });
+      if (b.attachment) {
+        if (!ATTACHMENT_TYPES.test(b.attachment.mime)) throw badRequest('Attach a photo (JPG, PNG) or a PDF.');
+        const file = Buffer.from(b.attachment.data, 'base64');
+        if (file.length > MAX_ATTACHMENT) throw badRequest('The attachment is larger than 4 MB.');
+        await trx('expense_attachments').where({ expense_id: id }).delete();
+        await trx('expense_attachments').insert({ expense_id: id, filename: b.attachment.filename, mime: b.attachment.mime, data: file });
+      }
+      const was = Number(row.amount) !== b.amount ? ` (amount ${Number(row.amount).toLocaleString()} → ${b.amount.toLocaleString()})` : '';
+      await audit(trx, user(req), 'Expense edited', `${row.ref} — ${b.description}${was}`);
+    });
+    res.json((await loadExpenses(db())).find((e) => e.id === id));
   });
 
   r.get('/expenses/:id/attachment', async (req, res) => {
@@ -126,9 +151,10 @@ export function financeRoutes({ db, auth }: Ctx) {
         const available = await balanceOf(trx, b.from);
         if (b.amount > available) throw badRequest(`${LABEL[b.from]} only has ${available.toLocaleString()} available.`);
         const date = new Date();
+        const group = randomUUID();
         await trx('cash_entries').insert([
-          { date, direction: 'out', amount: b.amount, method: b.from, description: b.description, category: 'Transfer' },
-          { date, direction: 'in', amount: b.amount, method: b.to, description: b.description, category: 'Transfer' },
+          { date, direction: 'out', amount: b.amount, method: b.from, description: b.description, category: 'Transfer', group_ref: group },
+          { date, direction: 'in', amount: b.amount, method: b.to, description: b.description, category: 'Transfer', group_ref: group },
         ]);
         await audit(trx, user(req), 'Transfer', `${LABEL[b.from]} → ${LABEL[b.to]} — ${b.amount.toLocaleString()}`);
       } finally {
@@ -136,6 +162,21 @@ export function financeRoutes({ db, auth }: Ctx) {
       }
     });
     res.status(201).json(await loadCash(db()));
+  });
+
+  // Voids a cashbook entry (both halves of a transfer together). Kept on record with the reason.
+  r.post('/cash/:id/void', async (req, res) => {
+    const b = parse(z.object({ reason: z.string().trim().min(3, 'Give a reason for voiding the entry.').max(500) }), req.body);
+    await db().transaction(async (trx) => {
+      const row = await trx('cash_entries').where({ id: idParam(req) }).forUpdate().first();
+      if (!row) throw notFound('Cashbook entry');
+      if (row.voided_at) throw conflict('This entry is already voided.');
+      const q = trx('cash_entries');
+      if (row.group_ref) q.where({ group_ref: row.group_ref }); else q.where({ id: row.id });
+      await q.update({ voided_at: new Date(), void_reason: b.reason });
+      await audit(trx, user(req), 'Cashbook entry voided', `${row.category} — ${row.description} — ${Number(row.amount).toLocaleString()} — ${b.reason}`);
+    });
+    res.json(await loadCash(db()));
   });
 
   // ---- reconciliation: the system balance is always worked out on the server ----
@@ -147,6 +188,14 @@ export function financeRoutes({ db, auth }: Ctx) {
     const [id] = await db()('reconciliations').insert({ date: new Date(), method: b.method, system_amount: system, counted: b.counted, difference: b.counted - system, notes: b.notes || null, user_name: user(req) });
     await audit(db(), user(req), 'Cash count', `${LABEL[b.method]}: counted ${b.counted.toLocaleString()}, system ${system.toLocaleString()}`);
     res.status(201).json((await loadReconciliations(db())).find((x) => x.id === id));
+  });
+
+  r.delete('/reconciliations/:id', async (req, res) => {
+    const row = await db()('reconciliations').where({ id: idParam(req) }).first();
+    if (!row) throw notFound('Cash count');
+    await db()('reconciliations').where({ id: row.id }).delete();
+    await audit(db(), user(req), 'Cash count deleted', `${LABEL[row.method as Method]} count of ${Number(row.counted).toLocaleString()}`);
+    res.status(204).end();
   });
 
   return r;

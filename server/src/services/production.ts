@@ -89,6 +89,15 @@ export async function createBatch(db: Db, user: string, b: { expectedLitres: num
   return one(db, id);
 }
 
+export async function updateBatch(db: Db, user: string, id: number, b: { expectedLitres: number; responsible: string }) {
+  await db.transaction(async (trx) => {
+    const row = await openBatch(trx, id);
+    await trx('batches').where({ id }).update({ expected_litres: b.expectedLitres, responsible: b.responsible });
+    await audit(trx, user, 'Batch edited', `${row.batch_no} — ${b.expectedLitres} L, ${b.responsible}`);
+  });
+  return one(db, id);
+}
+
 export async function addMaterials(db: Db, user: string, id: number, materials: Material[]) {
   await db.transaction(async (trx) => {
     const row = await openBatch(trx, id);

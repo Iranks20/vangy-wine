@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
+import { Page } from './components/Page';
 import { useStore } from './lib/store';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -26,24 +27,24 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="sales" element={<Sales />} />
-        <Route path="sales/new" element={<NewSale />} />
-        <Route path="sales/:id" element={<SaleDetail />} />
-        <Route path="invoices" element={<Invoices />} />
-        <Route path="invoices/:id" element={<SaleDetail />} />
-        <Route path="receipts" element={<Receipts />} />
-        <Route path="receipts/:no" element={<ReceiptView />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="production" element={<Production />} />
-        <Route path="purchases" element={<Purchases />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="expenses" element={<Expenses />} />
-        <Route path="finance" element={<Finance />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="employees" element={<Employees />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route index element={<Page needs={[]}><Dashboard /></Page>} />
+        <Route path="sales" element={<Page needs={['sales']}><Sales /></Page>} />
+        <Route path="sales/new" element={<Page needs={['items', 'customers', 'employees']}><NewSale /></Page>} />
+        <Route path="sales/:id" element={<Page needs={['sales', 'customers', 'employees']}><SaleDetail /></Page>} />
+        <Route path="invoices" element={<Page needs={['sales']}><Invoices /></Page>} />
+        <Route path="invoices/:id" element={<Page needs={['sales', 'customers', 'employees']}><SaleDetail /></Page>} />
+        <Route path="receipts" element={<Page needs={['sales']}><Receipts /></Page>} />
+        <Route path="receipts/:no" element={<Page needs={['sales']}><ReceiptView /></Page>} />
+        <Route path="inventory" element={<Page needs={['items', 'movements']}><Inventory /></Page>} />
+        <Route path="production" element={<Page needs={['batches', 'recipes', 'items', 'employees']}><Production /></Page>} />
+        <Route path="purchases" element={<Page needs={['purchases', 'suppliers', 'items']}><Purchases /></Page>} />
+        <Route path="suppliers" element={<Page needs={['suppliers', 'purchases']}><Suppliers /></Page>} />
+        <Route path="customers" element={<Page needs={['customers', 'sales']}><Customers /></Page>} />
+        <Route path="expenses" element={<Page needs={['expenses']}><Expenses /></Page>} />
+        <Route path="finance" element={<Page needs={['sales', 'purchases', 'suppliers', 'expenses', 'cash', 'reconciliations']}><Finance /></Page>} />
+        <Route path="reports" element={<Page needs={[]}><Reports /></Page>} />
+        <Route path="employees" element={<Page needs={['employees', 'sales']}><Employees /></Page>} />
+        <Route path="settings" element={<Page needs={['settings', 'items', 'audit']}><SettingsPage /></Page>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

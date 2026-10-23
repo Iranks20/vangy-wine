@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { conflict, idParam, notFound, parse } from '../lib/http';
 import { audit } from '../lib/util';
 import { currentUser } from '../services/auth';
-import { addMaterials, addStage, createBatch, loadBatches, loadRecipes, recordOutputs, rejectBatch, releaseBatch, saveRecipe, setQc } from '../services/production';
+import { addMaterials, addStage, createBatch, updateBatch, loadBatches, loadRecipes, recordOutputs, rejectBatch, releaseBatch, saveRecipe, setQc } from '../services/production';
 import type { Ctx } from './context';
 
 const materials = z.array(z.object({
@@ -50,6 +50,14 @@ export function productionRoutes({ db, auth }: Ctx) {
       materials,
     }), req.body);
     res.status(201).json(await createBatch(db(), user(req), b));
+  });
+
+  r.put('/batches/:id', async (req, res) => {
+    const b = parse(z.object({
+      expectedLitres: z.coerce.number().positive('Expected output must be more than zero.').max(1_000_000),
+      responsible: z.string().trim().min(1, 'Who is responsible?').max(120),
+    }), req.body);
+    res.json(await updateBatch(db(), user(req), idParam(req), b));
   });
 
   r.post('/batches/:id/materials', async (req, res) => {
