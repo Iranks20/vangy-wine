@@ -9,6 +9,14 @@ import type {
 
 export * from '../../../shared/calc';
 
+const fileToBase64 = (f: File) => new Promise<string>((resolve, reject) => {
+  if (f.size > 4 * 1024 * 1024) return reject(new Error('The attachment is larger than 4 MB.'));
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+  r.onerror = () => reject(new Error('Could not read the file.'));
+  r.readAsDataURL(f);
+});
+
 // ---------- store ----------
 type NewSale = { salesperson: string; customerId?: number; customerName: string; customerPhone?: string; lines: Omit<SaleLine, 'cost' | 'name'>[]; paid: number; method: Method | 'credit'; delivery?: string; notes?: string; date: string };
 
@@ -26,6 +34,9 @@ const API_RESOURCES = {
   purchases: '/purchases',
   recipes: '/recipes',
   batches: '/batches',
+  expenses: '/expenses',
+  cash: '/cash',
+  reconciliations: '/reconciliations',
 } satisfies Partial<Record<keyof Db, string>>;
 type ApiKey = keyof typeof API_RESOURCES;
 
@@ -174,28 +185,25 @@ function useStoreState() {
     },
     rejectBatch: async (id: number, reason: string) => { await api.post(`/batches/${id}/reject`, { reason }); await refresh('batches', 'audit'); },
 
-    addExpense: (e: Omit<Expense, 'id' | 'ref' | 'status'>) => mutate((d) => {
-      if (e.amount <= 0) throw new Error('Amount must be more than zero.');
-      const id = nextId(d.expenses);
-      const ref = `EXP-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
-      d.expenses.push({ ...e, id, ref, status: 'active' });
-      audit(d, 'Expense recorded', `${ref} — ${e.description}`);
-    }),
-    voidExpense: (id: number, reason: string) => mutate((d) => {
-      const e = d.expenses.find((x) => x.id === id)!;
-      e.status = 'voided';
-      audit(d, 'Expense voided', `${e.ref} — ${reason}`);
-    }),
-    addTransfer: (t: { date: string; amount: number; from: Method; to: Method; description: string }) => mutate((d) => {
-      if (t.amount <= 0) throw new Error('Amount must be more than zero.');
-      d.cash.push({ id: nextId(d.cash), date: t.date, direction: 'out', amount: t.amount, method: t.from, description: t.description, category: 'Transfer' });
-      d.cash.push({ id: nextId(d.cash), date: t.date, direction: 'in', amount: t.amount, method: t.to, description: t.description, category: 'Transfer' });
-    }),
-    addCash: (c: Omit<CashEntry, 'id'>) => mutate((d) => {
-      if (c.amount <= 0) throw new Error('Amount must be more than zero.');
-      d.cash.push({ ...c, id: nextId(d.cash) });
-      audit(d, 'Cashbook entry', `${c.category} — ${c.description}`);
-    }),
+    addExpense: async (e: Omit<Expense, 'id' | 'ref' | 'status'>, file?: File | null) => {
+      const attachment = file ? { filename: file.name, mime: file.type || 'application/octet-stream', data: await fileToBase64(file) } : undefined;
+      await api.post('/expenses', { ...e, attachment });
+      await refresh('expenses', 'audit');
+    },
+    voidExpense: async (id: number, reason: string) => { await api.post(`/expenses/${id}/void`, { reason }); await refresh('expenses', 'audit'); },
+    openAttachment: async (id: number) => {
+      const blob = await api.blob(`/expenses/${id}/attachment`);
+      window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+    },
+    addCash: async (c: Omit<CashEntry, 'id'>) => { await api.post('/cash', c); await refresh('cash', 'audit'); },
+    addTransfer: async (t: { amount: number; from: Method; to: Method; description: string }) => {
+      await api.post('/cash/transfer', t);
+      await refresh('cash', 'audit');
+    },
+    saveCount: async (method: Method, counted: number, notes?: string) => {
+      await api.post('/reconciliations', { method, counted, notes });
+      await refresh('reconciliations', 'audit');
+    },
 
     updateSettings: async (s: Settings) => {
       await api.put('/settings', s);

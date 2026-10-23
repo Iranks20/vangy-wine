@@ -7,7 +7,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import type { Method } from '../lib/types';
 
 export default function Finance() {
-  const { db, addCash, addTransfer } = useStore();
+  const { db, addCash, addTransfer, saveCount } = useStore();
   const run = useRun();
   const [tab, setTab] = useState<'cashbook' | 'daily' | 'recon'>('cashbook');
   const [acct, setAcct] = useState<'' | Method>('');
@@ -42,7 +42,7 @@ export default function Finance() {
       if (!form.description.trim()) throw new Error('Description is required.');
       if (form.kind === 'transfer') {
         if (form.method === form.to) throw new Error('Choose two different accounts.');
-        await addTransfer({ date, amount, from: form.method, to: form.to, description: form.description });
+        await addTransfer({ amount, from: form.method, to: form.to, description: form.description });
       } else {
         const label = { other_in: 'Other income', other_out: 'Other payment', opening: 'Opening balance' }[form.kind]!;
         await addCash({ date, direction: form.kind === 'other_out' ? 'out' : 'in', amount, method: form.method, description: form.description, category: label });
@@ -88,11 +88,19 @@ export default function Finance() {
                 <div key={m} className="grid grid-cols-2 items-end gap-3 rounded-lg border border-stone-200 p-3 sm:grid-cols-4">
                   <div><p className="text-sm font-medium">{methodLabel[m]}</p><p className="text-xs text-stone-500">System balance</p><p className="font-semibold">{ugx(bal(m))}</p></div>
                   <Field label="Counted"><Input type="number" value={counted[m] ?? ''} onChange={(e) => setCounted({ ...counted, [m]: e.target.value })} /></Field>
-                  <div className="col-span-2 text-sm">{diff === null ? <span className="text-stone-400">Enter the counted amount</span> : diff === 0 ? <span className="font-medium text-emerald-700">Balanced ✓</span> : <span className="font-medium text-red-600">Difference: {ugx(diff)} ({diff > 0 ? 'surplus' : 'shortage'})</span>}</div>
+                  <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 text-sm">{diff === null ? <span className="text-stone-400">Enter the counted amount</span> : diff === 0 ? <span className="font-medium text-emerald-700">Balanced ✓</span> : <span className="font-medium text-red-600">Difference: {ugx(diff)} ({diff > 0 ? 'surplus' : 'shortage'})</span>}
+                    {diff !== null && <Button size="sm" variant="secondary" onClick={() => run(() => saveCount(m, Number(counted[m])), 'Count saved').then((ok) => ok && setCounted({ ...counted, [m]: '' }))}>Save count</Button>}</div>
                 </div>
               );
             })}
           </div>
+          {db.reconciliations.length > 0 && <>
+            <h3 className="mb-2 mt-6 text-sm font-semibold">Saved counts</h3>
+            <div className="overflow-x-auto"><table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase text-stone-500"><tr><th className="py-1">When</th><th>Account</th><th className="text-right">System</th><th className="text-right">Counted</th><th className="text-right">Difference</th><th className="pl-3">By</th></tr></thead>
+              <tbody className="divide-y divide-stone-100">{db.reconciliations.map((r) => <tr key={r.id}><td className="py-1.5">{fmtDateTime(r.date)}</td><td>{methodLabel[r.method]}</td><td className="text-right">{ugx(r.systemAmount)}</td><td className="text-right">{ugx(r.counted)}</td><td className={`text-right font-medium ${r.difference ? 'text-red-600' : 'text-emerald-700'}`}>{ugx(r.difference)}</td><td className="pl-3">{r.user}</td></tr>)}</tbody>
+            </table></div>
+          </>}
         </Card>
       )}
 

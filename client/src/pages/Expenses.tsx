@@ -9,7 +9,8 @@ import { DataTable, type Column } from '../components/DataTable';
 import type { Expense, Method } from '../lib/types';
 
 export default function Expenses() {
-  const { db, addExpense, voidExpense } = useStore();
+  const { db, addExpense, voidExpense, openAttachment } = useStore();
+  const [file, setFile] = useState<File | null>(null);
   const run = useRun();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -31,7 +32,7 @@ export default function Expenses() {
     { key: 'ref', label: 'Ref', render: (e) => <span className="font-mono text-xs">{e.ref}</span> },
     { key: 'date', label: 'Date', render: (e) => fmtDate(e.date) },
     { key: 'category', label: 'Category' },
-    { key: 'description', label: 'Description', hideOnMobile: true },
+    { key: 'description', label: 'Description', hideOnMobile: true, render: (e) => <span>{e.description}{e.hasAttachment && <button className="ml-2 text-xs text-wine-700 hover:underline" onClick={(ev) => { ev.stopPropagation(); run(() => openAttachment(e.id), ''); }}>📎 View</button>}</span> },
     { key: 'recipient', label: 'Paid to', hideOnMobile: true },
     { key: 'method', label: 'Method', value: (e) => methodLabel[e.method], hideOnMobile: true },
     { key: 'amount', label: 'Amount', align: 'right', render: (e) => <span className={e.status === 'voided' ? 'text-stone-400 line-through' : 'font-medium'}>{ugx(e.amount)}</span> },
@@ -42,8 +43,8 @@ export default function Expenses() {
 
   const save = async () => {
     if (!form.description.trim()) return toast.error('Description is required.');
-    if (await run(() => addExpense({ ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() }), 'Expense recorded')) {
-      setOpen(false); setForm({ ...form, description: '', amount: '', recipient: '', reference: '' });
+    if (await run(() => addExpense({ ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() }, file), 'Expense recorded')) {
+      setOpen(false); setFile(null); setForm({ ...form, description: '', amount: '', recipient: '', reference: '' });
     }
   };
 
@@ -85,7 +86,7 @@ export default function Expenses() {
           <Field label="Paid from"><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value as Method })}>{(['cash', 'mobile_money', 'bank'] as const).map((m) => <option key={m} value={m}>{methodLabel[m]}</option>)}</Select></Field>
           <Field label="Paid to"><Input value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} /></Field>
           <Field label="Receipt / reference"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></Field>
-          <Field label="Attachment (receipt photo)" className="sm:col-span-2"><Input type="file" accept="image/*,application/pdf" /></Field>
+          <Field label="Attachment (receipt photo or PDF, up to 4 MB)" className="sm:col-span-2"><Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
         </div>
       </Modal>
     </>
