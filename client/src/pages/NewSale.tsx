@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { newIdemKey } from '../lib/api';
@@ -16,7 +16,8 @@ export default function NewSale() {
   const toast = useToast();
   const products = db.items.filter((i) => i.category === 'finished');
 
-  const [customerId, setCustomerId] = useState<number | ''>('');
+  const [params] = useSearchParams();
+  const [customerId, setCustomerId] = useState<number | ''>(() => { const c = Number(params.get('customer')); return db.customers.some((x) => x.id === c) ? c : ''; });
   const [salesperson, setSalesperson] = useState(user!.name);
   const [walkName, setWalkName] = useState('');
   const [walkPhone, setWalkPhone] = useState('');

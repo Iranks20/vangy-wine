@@ -93,7 +93,8 @@ export const Input = (p: InputHTMLAttributes<HTMLInputElement>) => <input {...p}
 export const Textarea = (p: TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea rows={3} {...p} className={cx('input', p.className)} />;
 export const Select = ({ children, ...p }: SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx('input', p.className)}>{children}</select>;
 
-export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+// `printable` modals are what gets printed (e.g. statements); others are hidden when printing.
+export function Modal({ open, onClose, title, children, footer, wide, printable }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean; printable?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -102,18 +103,18 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4 no-print" onMouseDown={onClose}>
+    <div className={cx('fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4', printable ? 'print-modal' : 'no-print')} onMouseDown={onClose}>
       <div
         role="dialog" aria-modal="true" aria-label={title}
         className={cx('flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl', wide ? 'sm:max-w-4xl' : 'sm:max-w-lg')}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
+        <header className={cx('flex items-center justify-between border-b border-stone-100 px-5 py-4', printable && 'print:hidden')}>
           <h2 className="font-display text-lg font-bold text-wine-800">{title}</h2>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100" aria-label="Close"><X size={18} /></button>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 no-print" aria-label="Close"><X size={18} /></button>
         </header>
         <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-stone-100 px-5 py-3">{footer}</footer>}
+        {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-stone-100 px-5 py-3 no-print">{footer}</footer>}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Download, Eye, Pencil, Plus, Printer, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ClipboardList, Download, Eye, Pencil, Plus, Printer, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { categoryLabel, downloadCsv, fmtDate, fmtDateTime, num, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, useRun, useToast } from '../components/ui';
@@ -10,6 +11,7 @@ const blank: Item = { id: 0, code: '', name: '', category: 'raw', unit: 'kg', pr
 
 export default function Inventory() {
   const { db, saveItem, adjustStock, deleteItem } = useStore();
+  const nav = useNavigate();
   const run = useRun();
   const toast = useToast();
   const [tab, setTab] = useState<'items' | 'moves' | 'count'>('items');
@@ -51,6 +53,7 @@ export default function Inventory() {
   const itemActions: RowAction<Item>[] = [
     { label: 'View details', icon: Eye, onClick: setView },
     { label: 'Edit', icon: Pencil, onClick: (i) => setEdit(i) },
+    { label: 'Order more', icon: ClipboardList, onClick: (i) => nav(`/purchases?item=${i.id}`), show: (i) => i.category !== 'finished' },
     { label: 'Adjust stock', icon: SlidersHorizontal, onClick: (i) => setAdj({ itemId: i.id, kind: 'damage', qty: '', reason: '' }) },
     { label: 'Delete', icon: Trash2, tone: 'danger', onClick: removeItem },
   ];

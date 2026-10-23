@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Eye, Mail, Pencil, Phone, Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Eye, Mail, Pencil, Phone, Plus, Printer, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { purchaseBalance, purchasePaid, purchaseTotal, useStore } from '../lib/store';
 import { fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, useRun, useToast } from '../components/ui';
@@ -10,6 +11,7 @@ const blank: Supplier = { id: 0, name: '', contact: '', phone: '', email: '', su
 
 export default function Suppliers() {
   const { db, saveSupplier, deleteSupplier } = useStore();
+  const nav = useNavigate();
   const run = useRun();
   const toast = useToast();
   const [edit, setEdit] = useState<Supplier | null>(null);
@@ -28,6 +30,7 @@ export default function Suppliers() {
 
   const actions: RowAction<Supplier>[] = [
     { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'New purchase order', icon: ClipboardList, onClick: (x) => nav(`/purchases?supplier=${x.id}`) },
     { label: 'Edit', icon: Pencil, onClick: (x) => setEdit(x) },
     { label: 'Delete', icon: Trash2, tone: 'danger', onClick: async (x) => {
       if (await toast.confirm({ title: `Delete ${x.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteSupplier(x.id), 'Supplier deleted');
@@ -39,8 +42,12 @@ export default function Suppliers() {
       <PageHeader title="Suppliers" subtitle="Who supplies what, and what we owe them." actions={<Button onClick={() => setEdit({ ...blank })}><Plus size={16} />Add supplier</Button>} />
       <DataTable rows={db.suppliers} columns={cols} actions={actions} onRowClick={setView} />
 
-      <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide footer={view && <Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button>}>
+      <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide printable footer={view && <><Button variant="secondary" onClick={() => nav(`/purchases?supplier=${view.id}`)}><ClipboardList size={16} />New purchase order</Button><Button variant="secondary" onClick={() => window.print()}><Printer size={16} />Print statement</Button><Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button></>}>
         {view && <>
+          <div className="mb-4 hidden border-b-2 border-wine-700 pb-3 print:block">
+            <p className="font-display text-xl font-bold text-wine-800">{db.settings.businessName}</p>
+            <p className="text-sm text-stone-600">Supplier statement — {view.name} · as at {fmtDate(new Date().toISOString())}</p>
+          </div>
           <div className="flex flex-wrap gap-4 text-sm text-stone-600">
             <span>{view.contact}</span>
             <a href={`tel:${view.phone}`} className="flex items-center gap-1 text-wine-700"><Phone size={14} />{view.phone}</a>

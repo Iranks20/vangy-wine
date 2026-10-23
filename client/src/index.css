@@ -44,4 +44,10 @@ input, select, textarea { font-size: 16px; } /* stops iOS zoom on focus */
   body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
   .print-area { box-shadow: none !important; border: none !important; }
+  /* When a printable window is open, print only that window. */
+  body:has(.print-modal) * { visibility: hidden; }
+  body:has(.print-modal) .print-modal, body:has(.print-modal) .print-modal * { visibility: visible; }
+  .print-modal { position: absolute !important; inset: 0 auto auto 0 !important; width: 100%; display: block !important; background: white !important; padding: 0 !important; }
+  .print-modal [role=dialog] { max-width: none !important; max-height: none !important; box-shadow: none !important; border-radius: 0 !important; }
+  .print-modal .overflow-y-auto { overflow: visible !important; }
 }

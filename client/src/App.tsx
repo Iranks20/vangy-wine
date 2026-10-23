@@ -28,10 +28,10 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Page needs={[]}><Dashboard /></Page>} />
-        <Route path="sales" element={<Page needs={['sales']}><Sales /></Page>} />
+        <Route path="sales" element={<Page needs={['sales', 'employees']}><Sales /></Page>} />
         <Route path="sales/new" element={<Page needs={['items', 'customers', 'employees']}><NewSale /></Page>} />
         <Route path="sales/:id" element={<Page needs={['sales', 'customers', 'employees']}><SaleDetail /></Page>} />
-        <Route path="invoices" element={<Page needs={['sales']}><Invoices /></Page>} />
+        <Route path="invoices" element={<Page needs={['sales', 'employees']}><Invoices /></Page>} />
         <Route path="invoices/:id" element={<Page needs={['sales', 'customers', 'employees']}><SaleDetail /></Page>} />
         <Route path="receipts" element={<Page needs={['sales']}><Receipts /></Page>} />
         <Route path="receipts/:no" element={<Page needs={['sales']}><ReceiptView /></Page>} />
@@ -44,7 +44,7 @@ export default function App() {
         <Route path="finance" element={<Page needs={['sales', 'purchases', 'suppliers', 'expenses', 'cash', 'reconciliations']}><Finance /></Page>} />
         <Route path="reports" element={<Page needs={[]}><Reports /></Page>} />
         <Route path="employees" element={<Page needs={['employees', 'sales']}><Employees /></Page>} />
-        <Route path="settings" element={<Page needs={['settings', 'items', 'audit']}><SettingsPage /></Page>} />
+        <Route path="settings" element={<Page needs={['settings', 'items', 'audit', 'customers', 'suppliers']}><SettingsPage /></Page>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

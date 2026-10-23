@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Eye, Pencil, Phone, Plus, Printer, Trash2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Eye, Pencil, Phone, Plus, Printer, ShoppingCart, Trash2 } from 'lucide-react';
 import { saleBalance, salePaid, saleStatus, saleTotal, useStore } from '../lib/store';
 import { customerTypeLabel, fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Textarea, useRun, useToast } from '../components/ui';
@@ -12,6 +12,7 @@ const blank: Customer = { id: 0, name: '', phone: '', type: 'retail', location: 
 
 export default function Customers() {
   const { db, saveCustomer, deleteCustomer } = useStore();
+  const nav = useNavigate();
   const run = useRun();
   const toast = useToast();
   const [edit, setEdit] = useState<Customer | null>(null);
@@ -42,6 +43,7 @@ export default function Customers() {
 
   const actions: RowAction<Customer>[] = [
     { label: 'View details', icon: Eye, onClick: setView },
+    { label: 'New sale', icon: ShoppingCart, onClick: (x) => nav(`/sales/new?customer=${x.id}`) },
     { label: 'Edit', icon: Pencil, onClick: (x) => setEdit(x) },
     { label: 'Delete', icon: Trash2, tone: 'danger', onClick: async (x) => {
       if (await toast.confirm({ title: `Delete ${x.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteCustomer(x.id), 'Customer deleted');
@@ -59,12 +61,16 @@ export default function Customers() {
       </div>
       <DataTable rows={db.customers} columns={cols} actions={actions} onRowClick={setView} />
 
-      <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide
-        footer={view && <><Button variant="secondary" onClick={() => window.print()}><Printer size={16} />Print statement</Button><Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button></>}>
+      <Modal open={!!view} onClose={() => setView(null)} title={view?.name ?? ''} wide printable
+        footer={view && <><Button variant="secondary" onClick={() => nav(`/sales/new?customer=${view.id}`)}><ShoppingCart size={16} />New sale</Button><Button variant="secondary" onClick={() => window.print()}><Printer size={16} />Print statement</Button><Button variant="secondary" onClick={() => { setEdit(view); setView(null); }}>Edit details</Button></>}>
         {view && <>
+          <div className="mb-4 hidden border-b-2 border-wine-700 pb-3 print:block">
+            <p className="font-display text-xl font-bold text-wine-800">{db.settings.businessName}</p>
+            <p className="text-sm text-stone-600">Customer statement — {view.name} · as at {fmtDate(new Date().toISOString())}</p>
+          </div>
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div><p className="text-stone-500">Type</p><p className="font-medium">{customerTypeLabel[view.type]}</p></div>
-            <div><p className="text-stone-500">Phone</p><a href={`tel:${view.phone}`} className="flex items-center gap-1 font-medium text-wine-700"><Phone size={14} />{view.phone}</a></div>
+            <div><p className="text-stone-500">Phone</p>{view.phone ? <a href={`tel:${view.phone}`} className="flex items-center gap-1 font-medium text-wine-700"><Phone size={14} />{view.phone}</a> : <p className="font-medium">—</p>}</div>
             <div><p className="text-stone-500">Payment terms</p><p className="font-medium">{view.terms ? `${view.terms} days` : 'Cash on delivery'}</p></div>
             <div><p className="text-stone-500">Balance owed</p><p className="font-semibold text-red-600">{ugx(owes(view.id))}</p></div>
           </div>

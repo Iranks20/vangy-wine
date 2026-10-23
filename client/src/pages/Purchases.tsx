@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Ban, Eye, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import { purchaseBalance, purchaseBilled, purchasePaid, purchaseTotal, useStore } from '../lib/store';
 import { fmtDate, fmtDateTime, methodLabel, num, ugx } from '../lib/format';
@@ -17,7 +18,20 @@ export default function Purchases() {
   const blankLine = () => ({ itemId: buyable[0]?.id ?? 0, qty: 1, cost: buyable[0]?.cost ?? 0, received: 0 });
   const [form, setForm] = useState({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] });
   const [editId, setEditId] = useState<number | null>(null);
-  const startNew = () => { setEditId(null); setForm({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] }); setNewOpen(true); };
+  const startNew = (supplierId?: number, itemId?: number) => {
+    const it = buyable.find((i) => i.id === itemId);
+    setEditId(null);
+    setForm({ supplierId: supplierId ?? db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [it ? { itemId: it.id, qty: Math.max(1, Math.ceil(it.min * 2 - it.qty)), cost: it.cost, received: 0 } : blankLine()] });
+    setNewOpen(true);
+  };
+  // Links from Suppliers ("New purchase order") and Inventory ("Order more") open a pre-filled order.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const supplier = Number(params.get('supplier')) || undefined, item = Number(params.get('item')) || undefined;
+    if (!supplier && !item) return;
+    startNew(db.suppliers.some((x) => x.id === supplier) ? supplier : undefined, item);
+    setParams({}, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [openId, setOpenId] = useState<number | null>(null);
   const [recv, setRecv] = useState<number[]>([]);
   const [pay, setPay] = useState({ amount: '', method: 'bank' as Method });
@@ -62,7 +76,7 @@ export default function Purchases() {
   return (
     <>
       <PageHeader title="Purchases" subtitle="Stock only increases when goods are actually received."
-        actions={<Button onClick={startNew}><Plus size={16} />New purchase order</Button>} />
+        actions={<Button onClick={() => startNew()}><Plus size={16} />New purchase order</Button>} />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Open orders" value={db.purchases.filter((x) => x.status === 'ordered' || x.status === 'partial').length} tone="gold" />
         <Stat label="Received value" value={ugx(db.purchases.reduce((t, x) => t + purchaseBilled(x), 0))} />
