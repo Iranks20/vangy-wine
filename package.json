@@ -7,9 +7,11 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "setup": "npm --prefix client install",
-    "dev": "npm --prefix client run dev",
-    "build": "npm --prefix client run build",
-    "start": "npm --prefix client run preview"
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "dev:api": "npm --prefix server run dev",
+    "dev:web": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "test": "npm --prefix server test",
+    "start": "npm --prefix server start"
   }
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Plus } from 'lucide-react';
 import { saleBalance, salePaid, saleStatus, saleTotal, useStore } from '../lib/store';
+import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDateTime, methodLabel, ugx } from '../lib/format';
 import { Button, Input, PageHeader, Select, Stat } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
@@ -18,7 +19,7 @@ export default function Sales() {
   const [method, setMethod] = useState('');
 
   const rows = useMemo(() => [...db.sales].reverse().filter((s) =>
-    (!from || s.date.slice(0, 10) >= from) && (!to || s.date.slice(0, 10) <= to) &&
+    (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to) &&
     (!status || saleStatus(s) === status) && (!person || s.salesperson === person) &&
     (!method || s.payments.some((p) => p.method === method) || (method === 'credit' && saleBalance(s) > 0))), [db.sales, from, to, status, person, method]);
 

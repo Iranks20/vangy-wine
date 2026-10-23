@@ -10,5 +10,5 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000); // revoking at once can cancel the download
 }

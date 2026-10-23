@@ -12,7 +12,8 @@ export const fmtDate = (iso?: string) =>
   iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 export const fmtDateTime = (iso?: string) =>
   iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-export const today = () => new Date().toISOString().slice(0, 10);
+// Today's date (YYYY-MM-DD) in the local time zone, not UTC.
+export const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 export const methodLabel: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank', credit: 'Credit' };
 export const customerTypeLabel: Record<string, string> = {
   retail: 'Retail', wholesaler: 'Wholesaler', bar: 'Bar', restaurant: 'Restaurant', hotel: 'Hotel',

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Plus } from 'lucide-react';
 import { saleBalance, salePaid, saleTotal, useStore } from '../lib/store';
+import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDate, ugx } from '../lib/format';
 import { Badge, Button, Input, PageHeader, Select, Stat, type Tone } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
@@ -23,7 +24,7 @@ export default function Invoices() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const rows = [...db.sales].reverse().filter((s) =>
-    (!status || invoiceStatus(s) === status) && (!from || s.date.slice(0, 10) >= from) && (!to || s.date.slice(0, 10) <= to));
+    (!status || invoiceStatus(s) === status) && (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to));
   const open = db.sales.filter((s) => saleBalance(s) > 0);
 
   const cols: Column<Sale>[] = [

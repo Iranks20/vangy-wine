@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Banknote, Building2, Download, Plus, Scale, Smartphone } from 'lucide-react';
 import { cashbook, purchaseBalance, saleBalance, useStore, type CashLine } from '../lib/store';
+import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDate, fmtDateTime, methodLabel, today, ugx } from '../lib/format';
 import { Button, Card, Field, Input, Modal, PageHeader, Select, Stat, Tabs, useRun } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
@@ -23,7 +24,7 @@ export default function Finance() {
 
   const daily = useMemo(() => {
     const m = new Map<string, { day: string; in: number; out: number }>();
-    book.forEach((c) => { const d = c.date.slice(0, 10); const r = m.get(d) ?? { day: d, in: 0, out: 0 }; r[c.direction] += c.amount; m.set(d, r); });
+    book.forEach((c) => { const d = dayOf(c.date); const r = m.get(d) ?? { day: d, in: 0, out: 0 }; r[c.direction] += c.amount; m.set(d, r); });
     return [...m.values()].sort((a, b) => b.day.localeCompare(a.day));
   }, [book]);
 

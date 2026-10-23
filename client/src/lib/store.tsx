@@ -17,11 +17,9 @@ const fileToBase64 = (f: File) => new Promise<string>((resolve, reject) => {
   r.readAsDataURL(f);
 });
 
-// ---------- store ----------
 type NewSale = { salesperson: string; customerId?: number; customerName: string; customerPhone?: string; lines: Omit<SaleLine, 'cost' | 'name'>[]; paid: number; method: Method | 'credit'; delivery?: string; notes?: string; date: string };
 
-
-// Records loaded from the API, by key. Keys not listed here still use local sample records (moved over phase by phase).
+// Every collection the app shows, and the API endpoint it is loaded from.
 const API_RESOURCES = {
   settings: '/settings',
   audit: '/audit',
@@ -64,19 +62,6 @@ function useStoreState() {
       .catch(() => token.set(null))
       .finally(() => setReady(true));
   }, [refresh]);
-
-  const now = () => new Date().toISOString();
-  const nextId = (arr: { id: number }[]) => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
-
-  // Apply a mutation on a deep copy so a thrown validation error leaves state untouched.
-  function mutate<T>(fn: (d: Db) => T): T {
-    const draft: Db = structuredClone(db);
-    const result = fn(draft);
-    setDb(draft);
-    return result;
-  }
-  const audit = (d: Db, action: string, details: string) =>
-    d.audit.unshift({ id: nextId(d.audit), date: now(), user: user?.name ?? 'System', action, details });
 
   const actions = {
     login: async (username: string, password: string) => {
@@ -209,18 +194,18 @@ function useStoreState() {
       await api.put('/settings', s);
       await refresh('settings', 'audit');
     },
-    backupNow: () => mutate((d) => {
-      d.settings.lastBackup = now();
-      const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+    backupNow: async () => {
+      const blob = await api.blob('/backup');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `vangy-backup-${now().slice(0, 10)}.json`;
+      a.download = `vangy-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
-      audit(d, 'Backup', 'Manual backup downloaded');
-    }),
-    restore: (data: Db) => {
-      if (!data?.settings || !Array.isArray(data.items) || !Array.isArray(data.sales)) throw new Error('This file is not a valid Vangy backup.');
-      setDb(data);
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000); // revoking at once can cancel the download
+      await refresh('settings', 'audit');
+    },
+    restore: async (backup: unknown) => {
+      await api.post('/backup/restore', backup);
+      await refresh();
     },
   };
 

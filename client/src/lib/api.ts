@@ -15,7 +15,7 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, asBlob = false): Promise<T> {
   const headers: Record<string, string> = {};
   const t = token.get();
   if (t) headers.Authorization = `Bearer ${t}`;
@@ -28,8 +28,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   if (res.status === 401 && path !== '/auth/login') onUnauthorized();
   const isJson = res.headers.get('content-type')?.includes('application/json');
-  const data = isJson ? await res.json() : await res.blob();
-  if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error ?? `Request failed (${res.status}).`);
+  if (!res.ok) {
+    const err = isJson ? await res.json().catch(() => null) : null;
+    throw new ApiError(res.status, err?.error ?? `Request failed (${res.status}).`);
+  }
+  if (res.status === 204) return undefined as T;
+  const data = asBlob ? await res.blob() : isJson ? await res.json() : await res.blob();
   return data as T;
 }
 
@@ -38,7 +42,7 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body ?? {}),
   del: <T>(path: string) => request<T>('DELETE', path),
-  blob: (path: string) => request<Blob>('GET', path),
+  blob: (path: string) => request<Blob>('GET', path, undefined, true),
 };
 
 // A fresh key per form submission stops a double-tap from saving the same sale or payment twice.

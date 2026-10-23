@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, Printer } from 'lucide-react';
 import { useStore } from '../lib/store';
+import { dayOf } from '../../../shared/reports';
 import { downloadCsv, fmtDateTime, methodLabel, today, ugx } from '../lib/format';
 import { Button, Empty, PageHeader, Stat } from '../components/ui';
 import { DataTable, type Column } from '../components/DataTable';
@@ -18,7 +19,7 @@ const useReceipts = () => {
 export default function Receipts() {
   const rows = useReceipts();
   const nav = useNavigate();
-  const thisMonth = rows.filter((r) => r.date.slice(0, 7) === today().slice(0, 7));
+  const thisMonth = rows.filter((r) => dayOf(r.date).slice(0, 7) === today().slice(0, 7));
 
   const cols: Column<Row>[] = [
     { key: 'receiptNo', label: 'Receipt no.', value: (r) => r.receiptNo ?? '', render: (r) => <span className="font-medium text-wine-700">{r.receiptNo}</span> },

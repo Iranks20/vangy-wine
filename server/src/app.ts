@@ -13,6 +13,7 @@ import { salesRoutes } from './routes/sales';
 import { inventoryRoutes } from './routes/inventory';
 import { productionRoutes } from './routes/production';
 import { financeRoutes } from './routes/finance';
+import { insightRoutes } from './routes/insights';
 
 export function createApp(getDb: () => Db) {
   const app = express();
@@ -20,6 +21,7 @@ export function createApp(getDb: () => Db) {
   app.set('trust proxy', 1); // Railway sits behind a proxy; needed for correct client IPs in rate limiting
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigins, maxAge: 86400 }));
+  app.use('/api/backup/restore', express.json({ limit: '60mb' }));
   app.use(express.json({ limit: '6mb' }));
 
   const ctx: Ctx = { db: getDb, auth: requireAuth(getDb) };
@@ -36,6 +38,7 @@ export function createApp(getDb: () => Db) {
   app.use('/api', inventoryRoutes(ctx));
   app.use('/api', productionRoutes(ctx));
   app.use('/api', financeRoutes(ctx));
+  app.use('/api', insightRoutes(ctx));
 
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found.' }); });
   app.use(errorHandler);

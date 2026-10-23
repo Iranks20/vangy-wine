@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Download, Plus } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useStore } from '../lib/store';
+import { dayOf } from '../../../shared/reports';
 import { EXPENSE_CATEGORIES } from '../../../shared/defaults';
 import { downloadCsv, fmtDate, methodLabel, today, ugx } from '../lib/format';
 import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select, useRun, useToast } from '../components/ui';
@@ -18,7 +19,7 @@ export default function Expenses() {
   const [month, setMonth] = useState(today().slice(0, 7));
   const [form, setForm] = useState({ date: today(), category: EXPENSE_CATEGORIES[0], description: '', amount: '', method: 'cash' as Method, recipient: '', reference: '' });
 
-  const rows = [...db.expenses].reverse().filter((e) => (!cat || e.category === cat) && (!month || e.date.slice(0, 7) === month));
+  const rows = [...db.expenses].reverse().filter((e) => (!cat || e.category === cat) && (!month || dayOf(e.date).slice(0, 7) === month));
   const active = rows.filter((e) => e.status === 'active');
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
