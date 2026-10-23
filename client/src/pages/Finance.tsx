@@ -7,7 +7,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import type { Method } from '../lib/types';
 
 export default function Finance() {
-  const { db, addCash } = useStore();
+  const { db, addCash, addTransfer } = useStore();
   const run = useRun();
   const [tab, setTab] = useState<'cashbook' | 'daily' | 'recon'>('cashbook');
   const [acct, setAcct] = useState<'' | Method>('');
@@ -35,18 +35,17 @@ export default function Finance() {
     { key: 'out', label: 'Money out', align: 'right', value: (c) => (c.direction === 'out' ? c.amount : 0), render: (c) => c.direction === 'out' ? <span className="text-red-600">{ugx(c.amount)}</span> : '' },
   ];
 
-  const save = () => {
+  const save = async () => {
     const amount = Number(form.amount);
     const date = new Date().toISOString();
-    const ok = run(() => {
+    const ok = await run(async () => {
       if (!form.description.trim()) throw new Error('Description is required.');
       if (form.kind === 'transfer') {
         if (form.method === form.to) throw new Error('Choose two different accounts.');
-        addCash({ date, direction: 'out', amount, method: form.method, description: form.description, category: 'Transfer' });
-        addCash({ date, direction: 'in', amount, method: form.to, description: form.description, category: 'Transfer' });
+        await addTransfer({ date, amount, from: form.method, to: form.to, description: form.description });
       } else {
         const label = { other_in: 'Other income', other_out: 'Other payment', opening: 'Opening balance' }[form.kind]!;
-        addCash({ date, direction: form.kind === 'other_out' ? 'out' : 'in', amount, method: form.method, description: form.description, category: label });
+        await addCash({ date, direction: form.kind === 'other_out' ? 'out' : 'in', amount, method: form.method, description: form.description, category: label });
       }
     }, 'Cashbook entry saved');
     if (ok) { setOpen(false); setForm({ ...form, amount: '', description: '' }); }

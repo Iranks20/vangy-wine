@@ -1,79 +1,50 @@
-// Demo data store. Stands in for the future backend API: every action applies the
-// same business rules the server will (stock checks, balances, audit trail).
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { buildDemoDb, INVOICE_DEFAULTS } from './mock';
+// App data store. Records come from the Vangy Wine API; every change is sent to the server,
+// which applies the business rules, and the affected records are then reloaded.
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { buildDemoDb } from './mock';
+import { api, setUnauthorizedHandler, token } from './api';
 import type {
   Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
 } from './types';
+import { batchCost, batchGoodUnits, purchasePaid, purchaseTotal, saleBalance, saleTotal } from '../../../shared/calc';
 
-const KEY = 'vangy-data';
-
-// ---------- derived figures ----------
-export const lineTotal = (l: SaleLine) => l.qty * l.price - l.discount;
-export const saleTotal = (s: Sale) => s.lines.reduce((t, l) => t + lineTotal(l), 0);
-export const salePaid = (s: Sale) => s.payments.reduce((t, p) => t + p.amount, 0);
-export const saleBalance = (s: Sale) => (s.status === 'cancelled' ? 0 : saleTotal(s) - salePaid(s));
-export const saleCost = (s: Sale) => s.lines.reduce((t, l) => t + l.qty * l.cost, 0);
-export const saleStatus = (s: Sale) =>
-  s.status === 'cancelled' ? 'Cancelled' : saleBalance(s) <= 0 ? 'Paid' : salePaid(s) > 0 ? 'Partial' : 'Credit';
-
-export const purchaseTotal = (p: Purchase) => p.lines.reduce((t, l) => t + l.qty * l.cost, 0) + p.transport;
-export const purchaseBilled = (p: Purchase) =>
-  p.status === 'cancelled' ? 0 :
-  p.lines.reduce((t, l) => t + l.received * l.cost, 0) + (p.lines.some((l) => l.received > 0) ? p.transport : 0);
-export const purchasePaid = (p: Purchase) => p.payments.reduce((t, x) => t + x.amount, 0);
-export const purchaseBalance = (p: Purchase) => purchaseBilled(p) - purchasePaid(p);
-
-export const batchCost = (b: Batch) => b.materials.reduce((t, m) => t + m.qty * m.cost, 0);
-export const batchGoodUnits = (b: Batch) => b.outputs.reduce((t, o) => t + o.good, 0);
-
-export interface CashLine { id: string; date: string; direction: 'in' | 'out'; amount: number; method: Method; description: string; category: string; ref: string }
-
-export function cashbook(db: Db): CashLine[] {
-  const out: CashLine[] = [];
-  db.sales.forEach((s) => {
-    s.payments.forEach((p) => out.push({ id: `s${s.id}-${p.id}`, date: p.date, direction: 'in', amount: p.amount, method: p.method, description: `Receipt from ${s.customerName}`, category: 'Customer receipt', ref: s.invoice }));
-    if (s.status === 'cancelled' && salePaid(s) > 0)
-      out.push({ id: `r${s.id}`, date: s.date, direction: 'out', amount: salePaid(s), method: s.payments[0].method, description: `Refund — ${s.invoice} cancelled`, category: 'Refund', ref: s.invoice });
-  });
-  db.purchases.forEach((p) => p.payments.forEach((x) => out.push({ id: `p${p.id}-${x.id}`, date: x.date, direction: 'out', amount: x.amount, method: x.method, description: `Payment to ${db.suppliers.find((s) => s.id === p.supplierId)?.name}`, category: 'Supplier payment', ref: p.po })));
-  db.expenses.filter((e) => e.status === 'active').forEach((e) => out.push({ id: `e${e.id}`, date: e.date, direction: 'out', amount: e.amount, method: e.method, description: e.description, category: `Expense — ${e.category}`, ref: e.ref }));
-  db.cash.forEach((c) => out.push({ id: `c${c.id}`, date: c.date, direction: c.direction, amount: c.amount, method: c.method, description: c.description, category: c.category, ref: `CB-${c.id}` }));
-  return out.sort((a, b) => b.date.localeCompare(a.date));
-}
+export * from '../../../shared/calc';
 
 // ---------- store ----------
 type NewSale = { salesperson: string; customerId?: number; customerName: string; customerPhone?: string; lines: Omit<SaleLine, 'cost' | 'name'>[]; paid: number; method: Method | 'credit'; delivery?: string; notes?: string; date: string };
-
-// Brings data saved by an older version up to the current shape.
-function upgrade(d: Db): Db {
-  d.settings = { ...INVOICE_DEFAULTS, ...d.settings };
-  const pays = d.sales.flatMap((s) => s.payments);
-  let n = pays.reduce((m, p) => Math.max(m, Number(p.receiptNo?.split('-')[2] ?? 0)), 0);
-  [...pays].sort((a, b) => a.date.localeCompare(b.date)).forEach((p) => { if (!p.receiptNo) p.receiptNo = `RCT-${p.date.slice(0, 4)}-${String(++n).padStart(5, '0')}`; });
-  return d;
-}
 
 const nextReceiptNo = (d: Db) => {
   const n = d.sales.flatMap((s) => s.payments).reduce((m, p) => Math.max(m, Number(p.receiptNo?.split('-')[2] ?? 0)), 0);
   return `RCT-${new Date().getFullYear()}-${String(n + 1).padStart(5, '0')}`;
 };
 
-function load(): Db {
-  try { const raw = localStorage.getItem(KEY); if (raw) return upgrade(JSON.parse(raw)); } catch { /* fall through */ }
-  return buildDemoDb();
-}
+// Records loaded from the API, by key. Keys not listed here still use local sample records (moved over phase by phase).
+const API_RESOURCES = {
+  settings: '/settings',
+  audit: '/audit',
+} satisfies Partial<Record<keyof Db, string>>;
+type ApiKey = keyof typeof API_RESOURCES;
 
 function useStoreState() {
-  const [db, setDb] = useState<Db>(load);
-  const [loggedIn, setLoggedIn] = useState(() => {
-    try { return sessionStorage.getItem('vangy-auth') === '1'; } catch { return false; }
-  });
+  const [db, setDb] = useState<Db>(() => buildDemoDb());
+  const [user, setUser] = useState<Account | null>(null);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } }, [db]);
-  useEffect(() => { try { loggedIn ? sessionStorage.setItem('vangy-auth', '1') : sessionStorage.removeItem('vangy-auth'); } catch { /* ignore */ } }, [loggedIn]);
+  const refresh = useCallback(async (...keys: ApiKey[]) => {
+    const ks = keys.length ? keys : (Object.keys(API_RESOURCES) as ApiKey[]);
+    const data = await Promise.all(ks.map((k) => api.get<unknown>(API_RESOURCES[k])));
+    setDb((d) => ({ ...d, ...Object.fromEntries(ks.map((k, i) => [k, data[i]])) }));
+  }, []);
 
-  const user = loggedIn ? db.account : null;
+  useEffect(() => {
+    setUnauthorizedHandler(() => { token.set(null); setUser(null); });
+    if (!token.get()) { setReady(true); return; }
+    api.get<Account>('/auth/me')
+      .then(async (u) => { setUser(u); await refresh(); })
+      .catch(() => token.set(null))
+      .finally(() => setReady(true));
+  }, [refresh]);
+
   const now = () => new Date().toISOString();
   const nextId = (arr: { id: number }[]) => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 
@@ -106,18 +77,21 @@ function useStoreState() {
   };
 
   const actions = {
-    login: (username: string, password: string) => {
-      if (!username.trim() || !password) return false;
-      setLoggedIn(true);
-      mutate((d) => { d.audit.unshift({ id: nextId(d.audit), date: now(), user: d.account.name, action: 'Login', details: 'Signed in' }); });
-      return true;
+    login: async (username: string, password: string) => {
+      const r = await api.post<{ token: string; user: Account }>('/auth/login', { username, password });
+      token.set(r.token);
+      await refresh();
+      setUser(r.user);
     },
-    logout: () => setLoggedIn(false),
-    updateAccount: (a: Account) => mutate((d) => {
-      if (!a.name.trim()) throw new Error('Name is required.');
-      d.account = a;
-      audit(d, 'Profile updated', 'Account name changed');
-    }),
+    logout: () => { token.set(null); setUser(null); },
+    updateAccount: async (a: Account) => {
+      setUser(await api.put<Account>('/auth/profile', a));
+      await refresh('audit');
+    },
+    changePassword: async (current: string, next: string) => {
+      await api.put('/auth/password', { current, next });
+      await refresh('audit');
+    },
 
     addSale: (input: NewSale) => mutate((d) => {
       if (!input.lines.length) throw new Error('Add at least one product.');
@@ -302,13 +276,21 @@ function useStoreState() {
       e.status = 'voided';
       audit(d, 'Expense voided', `${e.ref} — ${reason}`);
     }),
+    addTransfer: (t: { date: string; amount: number; from: Method; to: Method; description: string }) => mutate((d) => {
+      if (t.amount <= 0) throw new Error('Amount must be more than zero.');
+      d.cash.push({ id: nextId(d.cash), date: t.date, direction: 'out', amount: t.amount, method: t.from, description: t.description, category: 'Transfer' });
+      d.cash.push({ id: nextId(d.cash), date: t.date, direction: 'in', amount: t.amount, method: t.to, description: t.description, category: 'Transfer' });
+    }),
     addCash: (c: Omit<CashEntry, 'id'>) => mutate((d) => {
       if (c.amount <= 0) throw new Error('Amount must be more than zero.');
       d.cash.push({ ...c, id: nextId(d.cash) });
       audit(d, 'Cashbook entry', `${c.category} — ${c.description}`);
     }),
 
-    updateSettings: (s: Settings) => mutate((d) => { d.settings = s; audit(d, 'Settings updated', 'Business settings saved'); }),
+    updateSettings: async (s: Settings) => {
+      await api.put('/settings', s);
+      await refresh('settings', 'audit');
+    },
     backupNow: () => mutate((d) => {
       d.settings.lastBackup = now();
       const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
@@ -319,12 +301,12 @@ function useStoreState() {
       audit(d, 'Backup', 'Manual backup downloaded');
     }),
     restore: (data: Db) => {
-      if (!data?.settings || !data?.account || !Array.isArray(data.items) || !Array.isArray(data.sales)) throw new Error('This file is not a valid Vangy backup.');
-      setDb(upgrade(data));
+      if (!data?.settings || !Array.isArray(data.items) || !Array.isArray(data.sales)) throw new Error('This file is not a valid Vangy backup.');
+      setDb(data);
     },
   };
 
-  return { db, user, ...actions };
+  return { db, user, ready, refresh, ...actions };
 }
 
 type Store = ReturnType<typeof useStoreState>;
@@ -332,7 +314,7 @@ const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const store = useStoreState();
-  const value = useMemo(() => store, [store.db, store.user]); // eslint-disable-line react-hooks/exhaustive-deps
+  const value = useMemo(() => store, [store.db, store.user, store.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

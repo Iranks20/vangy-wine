@@ -40,9 +40,9 @@ export default function Expenses() {
     ) },
   ];
 
-  const save = () => {
+  const save = async () => {
     if (!form.description.trim()) return toast.error('Description is required.');
-    if (run(() => addExpense({ ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() }), 'Expense recorded')) {
+    if (await run(() => addExpense({ ...form, amount: Number(form.amount), date: new Date(form.date + 'T12:00:00').toISOString() }), 'Expense recorded')) {
       setOpen(false); setForm({ ...form, description: '', amount: '', recipient: '', reference: '' });
     }
   };

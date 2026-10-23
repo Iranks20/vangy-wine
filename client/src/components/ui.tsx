@@ -195,7 +195,7 @@ export function useToast() {
 // Runs an action and shows success / error. Returns true on success.
 export function useRun() {
   const t = useToast();
-  return (fn: () => unknown, ok: string) => {
-    try { fn(); t.success(ok); return true; } catch (e) { t.error((e as Error).message); return false; }
+  return async (fn: () => unknown, ok: string) => {
+    try { await fn(); if (ok) t.success(ok); return true; } catch (e) { t.error((e as Error).message); return false; }
   };
 }

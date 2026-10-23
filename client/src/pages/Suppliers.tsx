@@ -47,7 +47,7 @@ export default function Suppliers() {
       </Modal>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit supplier' : 'New supplier'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Supplier name is required.'); }, ''); run(() => saveSupplier(edit!), 'Supplier saved') && setEdit(null); }}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Supplier name is required.'); }, ''); run(() => saveSupplier(edit!), 'Supplier saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Contact person"><Input value={edit.contact} onChange={(e) => setEdit({ ...edit, contact: e.target.value })} /></Field>

@@ -28,7 +28,7 @@ export default function Employees() {
       <DataTable rows={db.employees} columns={cols} onRowClick={setEdit} />
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit employee' : 'New employee'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Name is required.'); }, ''); run(() => saveEmployee(edit!), 'Employee saved') && setEdit(null); }}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Name is required.'); }, ''); run(() => saveEmployee(edit!), 'Employee saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full name" className="sm:col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Position"><Input value={edit.position} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="e.g. Sales Representative" /></Field>

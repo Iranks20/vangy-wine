@@ -32,8 +32,8 @@ export default function Purchases() {
   ];
 
   const openPo = (x: Purchase) => { setOpenId(x.id); setRecv(x.lines.map((l) => l.qty - l.received)); setPay({ amount: String(Math.max(0, purchaseTotal(x) - purchasePaid(x))), method: 'bank' }); };
-  const save = () => {
-    if (run(() => addPurchase({ supplierId: Number(form.supplierId), supplierInvoice: form.supplierInvoice, transport: Number(form.transport), date: new Date().toISOString(), lines: form.lines.filter((l) => l.qty > 0) }), 'Purchase order created')) setNewOpen(false);
+  const save = async () => {
+    if (await run(() => addPurchase({ supplierId: Number(form.supplierId), supplierInvoice: form.supplierInvoice, transport: Number(form.transport), date: new Date().toISOString(), lines: form.lines.filter((l) => l.qty > 0) }), 'Purchase order created')) setNewOpen(false);
   };
 
   return (

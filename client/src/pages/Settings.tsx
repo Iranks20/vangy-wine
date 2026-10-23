@@ -8,19 +8,20 @@ import type { Settings } from '../lib/types';
 import { KeyRound } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { db, updateSettings, updateAccount, backupNow, restore } = useStore();
+  const { db, user, updateSettings, updateAccount, changePassword, backupNow, restore } = useStore();
   const run = useRun();
   const toast = useToast();
   const [tab, setTab] = useState<'business' | 'products' | 'backup' | 'audit'>('business');
   const [s, setS] = useState<Settings>(db.settings);
-  const [acc, setAcc] = useState({ name: db.account.name, username: db.account.username });
+  const [acc, setAcc] = useState({ name: user!.name, username: user!.username });
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const file = useRef<HTMLInputElement>(null);
   const backupAge = db.settings.lastBackup ? (Date.now() - new Date(db.settings.lastBackup).getTime()) / 36e5 : Infinity;
 
   const onRestore = async (f?: File) => {
     if (!f) return;
     if (!(await toast.confirm({ title: 'Restore this backup?', text: 'All current data will be replaced by the backup file.', danger: true, confirmLabel: 'Restore' }))) return;
-    try { restore(JSON.parse(await f.text())); toast.success('Backup restored'); } catch (e) { toast.error((e as Error).message || 'Could not read the backup file.'); }
+    try { await restore(JSON.parse(await f.text())); toast.success('Backup restored'); } catch (e) { toast.error((e as Error).message || 'Could not read the backup file.'); }
   };
 
   return (
@@ -67,6 +68,22 @@ export default function SettingsPage() {
           </div>
           <div className="mt-4 flex justify-end">
             <Button onClick={() => run(() => updateAccount(acc), 'Profile updated')}>Update profile</Button>
+          </div>
+        </Card>
+      )}
+      {tab === 'business' && (
+        <Card title="Change password" className="mt-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Current password"><Input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></Field>
+            <Field label="New password" hint="At least 8 characters."><Input type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></Field>
+            <Field label="Confirm new password"><Input type="password" autoComplete="new-password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} /></Field>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => run(async () => {
+              if (pw.next !== pw.confirm) throw new Error('The two new passwords do not match.');
+              await changePassword(pw.current, pw.next);
+              setPw({ current: '', next: '', confirm: '' });
+            }, 'Password changed')}>Change password</Button>
           </div>
         </Card>
       )}

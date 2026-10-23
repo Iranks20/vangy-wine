@@ -111,7 +111,7 @@ export default function Inventory() {
 
       {/* add / edit item */}
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit item' : 'New stock item'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); run(() => saveItem(edit!), 'Item saved') && setEdit(null); }}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); run(() => saveItem(edit!), 'Item saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Code"><Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
@@ -131,7 +131,7 @@ export default function Inventory() {
 
       {/* adjustment */}
       <Modal open={!!adj} onClose={() => setAdj(null)} title="Stock adjustment"
-        footer={<><Button variant="secondary" onClick={() => setAdj(null)}>Cancel</Button><Button onClick={() => run(() => adjustStock(adj!.itemId, adj!.kind, Number(adj!.qty), adj!.reason), 'Adjustment recorded') && setAdj(null)}>Save adjustment</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setAdj(null)}>Cancel</Button><Button onClick={() => run(() => adjustStock(adj!.itemId, adj!.kind, Number(adj!.qty), adj!.reason), 'Adjustment recorded').then((ok) => ok && setAdj(null))}>Save adjustment</Button></>}>
         {adj && (
           <div className="space-y-3">
             <Field label="Item"><Select value={adj.itemId} onChange={(e) => setAdj({ ...adj, itemId: Number(e.target.value) })}>{db.items.map((i) => <option key={i.id} value={i.id}>{i.name} ({num(i.qty, 2)} {i.unit})</option>)}</Select></Field>

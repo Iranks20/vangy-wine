@@ -30,10 +30,10 @@ export default function NewSale() {
   const balance = total - paid;
   const update = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
-  const save = () => {
+  const save = async () => {
     try {
       const cust = db.customers.find((c) => c.id === customerId);
-      const sale = addSale({
+      const sale = await addSale({
         salesperson, customerId: cust?.id, customerName: cust?.name ?? walkName, customerPhone: cust?.phone ?? walkPhone,
         lines, paid, method, delivery, notes, date: new Date(date).toISOString(),
       });

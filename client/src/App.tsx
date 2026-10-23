@@ -20,7 +20,8 @@ import Employees from './pages/Employees';
 import SettingsPage from './pages/Settings';
 
 export default function App() {
-  const { user } = useStore();
+  const { user, ready } = useStore();
+  if (!ready) return <div className="flex min-h-full items-center justify-center text-sm text-stone-500">Loading…</div>;
   if (!user) return <Login />;
   return (
     <Routes>

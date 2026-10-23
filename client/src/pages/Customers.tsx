@@ -69,7 +69,7 @@ export default function Customers() {
       </Modal>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit customer' : 'New customer'}
-        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Customer name is required.'); }, ''); run(() => saveCustomer(edit!), 'Customer saved') && setEdit(null); }}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.name.trim()) return run(() => { throw new Error('Customer name is required.'); }, ''); run(() => saveCustomer(edit!), 'Customer saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="Phone"><Input value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>

@@ -28,9 +28,9 @@ export default function SaleDetail() {
     const reason = await toast.confirm({ title: `Cancel ${s.invoice}?`, text: 'Stock will be returned and any payments refunded in the cashbook. The invoice stays on record as cancelled.', danger: true, reason: true, confirmLabel: 'Cancel sale' });
     if (reason) run(() => cancelSale(s.id, reason), 'Sale cancelled and stock returned');
   };
-  const savePayment = () => {
+  const savePayment = async () => {
     try {
-      const receiptNo = addPayment(s.id, Number(amount), method, ref);
+      const receiptNo = await addPayment(s.id, Number(amount), method, ref);
       setPayOpen(false);
       toast.success(`Payment recorded — receipt ${receiptNo}`);
       nav(`/receipts/${receiptNo}`);

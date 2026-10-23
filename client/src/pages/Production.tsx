@@ -88,7 +88,7 @@ export default function Production() {
       )}
 
       <Modal open={newOpen} onClose={() => setNewOpen(false)} title="Start a production batch"
-        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={() => run(() => addBatch({ startDate: new Date().toISOString(), responsible: user!.name, expectedLitres: Number(litres), materials: mats.filter((m) => m.qty > 0) }), 'Batch started — materials issued from stock') && setNewOpen(false)}>Start batch</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setNewOpen(false)}>Cancel</Button><Button onClick={() => run(() => addBatch({ startDate: new Date().toISOString(), responsible: user!.name, expectedLitres: Number(litres), materials: mats.filter((m) => m.qty > 0) }), 'Batch started — materials issued from stock').then((ok) => ok && setNewOpen(false))}>Start batch</Button></>}>
         <div className="space-y-3">
           <Field label="Expected output (litres)" hint="Ingredient quantities are suggested from the recipe; adjust to what you actually use."><Input type="number" value={litres} onChange={(e) => scale(e.target.value)} /></Field>
           {mats.map((m, i) => { const it = db.items.find((x) => x.id === m.itemId)!; return (

@@ -196,7 +196,7 @@ export function buildDemoDb(): Db {
       expiryAlertDays: 60, allowOversell: false, lastBackup: daysAgo(1, 18),
       ...INVOICE_DEFAULTS,
     },
-    items, movements, customers, suppliers, sales, purchases, batches, expenses, cash, employees,
+    items, movements, customers, suppliers, sales, purchases, batches, expenses, cash, employees, recipes: [], reconciliations: [],
     audit: [
       { id: 1, date: daysAgo(0, 9), user: 'Vangy Director', action: 'Login', details: 'Signed in' },
       { id: 2, date: daysAgo(1, 18), user: 'System', action: 'Backup', details: 'Automatic backup completed' },

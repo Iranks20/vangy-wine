@@ -9,10 +9,13 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!login(username, password)) setError('Enter your username and password.');
+    if (!username.trim() || !password) return setError('Enter your username and password.');
+    setBusy(true); setError('');
+    try { await login(username, password); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
 
   return (
@@ -38,7 +41,7 @@ export default function Login() {
           <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus /></Field>
           <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></Field>
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-          <Button type="submit" className="w-full"><Lock size={16} />Sign in</Button>
+          <Button type="submit" className="w-full" disabled={busy}><Lock size={16} />{busy ? 'Signing in…' : 'Sign in'}</Button>
         </form>
       </div>
     </div>
