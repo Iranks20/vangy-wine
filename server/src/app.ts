@@ -11,6 +11,7 @@ import { auditRoutes, settingsRoutes } from './routes/settings';
 import { masterRoutes } from './routes/master';
 import { salesRoutes } from './routes/sales';
 import { inventoryRoutes } from './routes/inventory';
+import { productionRoutes } from './routes/production';
 
 export function createApp(getDb: () => Db) {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp(getDb: () => Db) {
   app.use('/api/sales', salesRoutes(ctx));
   app.use('/api', masterRoutes(ctx));
   app.use('/api', inventoryRoutes(ctx));
+  app.use('/api', productionRoutes(ctx));
 
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found.' }); });
   app.use(errorHandler);

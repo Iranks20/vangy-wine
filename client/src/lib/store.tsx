@@ -4,9 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { DEFAULT_SETTINGS } from '../../../shared/defaults';
 import { api, newIdemKey, setUnauthorizedHandler, token } from './api';
 import type {
-  Account, Batch, CashEntry, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
+  Account, Batch, CashEntry, Recipe, Customer, Db, Employee, Expense, Item, Method, Purchase, Sale, SaleLine, Settings, Supplier,
 } from './types';
-import { batchCost, batchGoodUnits } from '../../../shared/calc';
 
 export * from '../../../shared/calc';
 
@@ -25,6 +24,8 @@ const API_RESOURCES = {
   sales: '/sales',
   movements: '/movements',
   purchases: '/purchases',
+  recipes: '/recipes',
+  batches: '/batches',
 } satisfies Partial<Record<keyof Db, string>>;
 type ApiKey = keyof typeof API_RESOURCES;
 
@@ -65,24 +66,6 @@ function useStoreState() {
   }
   const audit = (d: Db, action: string, details: string) =>
     d.audit.unshift({ id: nextId(d.audit), date: now(), user: user?.name ?? 'System', action, details });
-
-  const stockOut = (d: Db, itemId: number, qty: number, type: string, ref: string, note?: string) => {
-    const it = d.items.find((i) => i.id === itemId)!;
-    if (qty > it.qty && !d.settings.allowOversell) throw new Error(`Not enough stock for ${it.name}: ${it.qty} ${it.unit} available, ${qty} requested.`);
-    let left = qty;
-    it.lots.sort((a, b) => (a.expiry ?? '9999').localeCompare(b.expiry ?? '9999'));
-    for (const l of it.lots) { const take = Math.min(l.qty, left); l.qty -= take; left -= take; if (!left) break; }
-    it.lots = it.lots.filter((l) => l.qty > 0);
-    it.qty -= qty;
-    d.movements.unshift({ id: nextId(d.movements), date: now(), itemId, type, qty: -qty, ref, note, user: user?.name ?? '' });
-  };
-  const stockIn = (d: Db, itemId: number, qty: number, unitCost: number, type: string, ref: string, lot?: { lotNo: string; expiry?: string }) => {
-    const it = d.items.find((i) => i.id === itemId)!;
-    if (it.qty + qty > 0) it.cost = Math.round(((Math.max(it.qty, 0) * it.cost) + qty * unitCost) / (Math.max(it.qty, 0) + qty)); // weighted average
-    it.qty += qty;
-    if (lot) it.lots.push({ lotNo: lot.lotNo, mfg: now().slice(0, 10), expiry: lot.expiry, qty });
-    d.movements.unshift({ id: nextId(d.movements), date: now(), itemId, type, qty, ref, user: user?.name ?? '' });
-  };
 
   const actions = {
     login: async (username: string, password: string) => {
@@ -165,51 +148,31 @@ function useStoreState() {
       await refresh('purchases', 'audit');
     },
 
-    addBatch: (b: { startDate: string; responsible: string; expectedLitres: number; materials: { itemId: number; qty: number }[] }) => mutate((d) => {
-      const id = nextId(d.batches);
-      const batchNo = `B-${new Date().getFullYear()}-${String(id).padStart(3, '0')}`;
-      const materials = b.materials.map((m) => {
-        const it = d.items.find((i) => i.id === m.itemId)!;
-        stockOut(d, m.itemId, m.qty, 'Used in production', batchNo);
-        return { ...m, cost: it.cost };
-      });
-      d.batches.push({ id, batchNo, startDate: b.startDate, responsible: b.responsible, expectedLitres: b.expectedLitres, stage: 'Preparation', stages: [{ stage: 'Preparation', date: now(), notes: 'Batch started' }], materials, outputs: [], lossLitres: 0, qc: 'pending', status: 'in_progress' });
-      audit(d, 'Batch created', batchNo);
-      return batchNo;
-    }),
-    addStage: (id: number, stage: string, notes: string) => mutate((d) => {
-      const b = d.batches.find((x) => x.id === id)!;
-      b.stage = stage; b.stages.push({ stage, date: now(), notes });
-    }),
-    recordOutputs: (id: number, outputs: Batch['outputs'], lossLitres: number) => mutate((d) => {
-      const b = d.batches.find((x) => x.id === id)!;
-      b.outputs = outputs.filter((o) => o.good > 0 || o.rejected > 0);
-      b.lossLitres = lossLitres; b.bottlingDate = now().slice(0, 10);
-      b.stage = 'Bottling'; b.stages.push({ stage: 'Bottling', date: now(), notes: `${batchGoodUnits(b)} good units recorded` });
-    }),
-    setQc: (id: number, result: 'passed' | 'failed', notes: string) => mutate((d) => {
-      const b = d.batches.find((x) => x.id === id)!;
-      b.qc = result; b.qcNotes = notes; b.stage = 'Quality check';
-      b.stages.push({ stage: 'Quality check', date: now(), notes: `${result.toUpperCase()} — ${notes}` });
-      audit(d, 'Quality check', `${b.batchNo} ${result}`);
-    }),
-    releaseBatch: (id: number) => mutate((d) => {
-      const b = d.batches.find((x) => x.id === id)!;
-      if (b.qc !== 'passed') throw new Error('A batch can only be released after it passes quality check.');
-      const units = batchGoodUnits(b);
-      if (!units) throw new Error('Record the bottled output first.');
-      const unitCost = batchCost(b) / units;
-      const exp = new Date(); exp.setFullYear(exp.getFullYear() + 1);
-      b.outputs.forEach((o) => o.good && stockIn(d, o.itemId, o.good, unitCost, 'Production output', b.batchNo, { lotNo: b.batchNo, expiry: exp.toISOString().slice(0, 10) }));
-      b.status = 'released'; b.stage = 'Released';
-      b.stages.push({ stage: 'Released', date: now(), notes: 'Moved to saleable stock' });
-      audit(d, 'Batch released', `${b.batchNo} — ${units} units to stock`);
-    }),
-    rejectBatch: (id: number, reason: string) => mutate((d) => {
-      const b = d.batches.find((x) => x.id === id)!;
-      b.status = 'rejected'; b.stage = 'Rejected'; b.stages.push({ stage: 'Rejected', date: now(), notes: reason });
-      audit(d, 'Batch rejected', `${b.batchNo} — ${reason}`);
-    }),
+    saveRecipe: async (r: Recipe) => {
+      if (r.id) await api.put(`/recipes/${r.id}`, r); else await api.post('/recipes', r);
+      await refresh('recipes', 'audit');
+    },
+    deleteRecipe: async (id: number) => { await api.del(`/recipes/${id}`); await refresh('recipes', 'audit'); },
+    addBatch: async (b: { responsible: string; expectedLitres: number; materials: { itemId: number; qty: number }[] }) => {
+      const created = await api.post<Batch>('/batches', b);
+      await refresh('batches', 'items', 'movements', 'audit');
+      return created.batchNo;
+    },
+    addBatchMaterials: async (id: number, materials: { itemId: number; qty: number }[]) => {
+      await api.post(`/batches/${id}/materials`, { materials });
+      await refresh('batches', 'items', 'movements', 'audit');
+    },
+    addStage: async (id: number, stage: string, notes: string) => { await api.post(`/batches/${id}/stages`, { stage, notes }); await refresh('batches', 'audit'); },
+    recordOutputs: async (id: number, outputs: Batch['outputs'], lossLitres: number) => {
+      await api.post(`/batches/${id}/outputs`, { outputs, lossLitres });
+      await refresh('batches', 'audit');
+    },
+    setQc: async (id: number, result: 'passed' | 'failed', notes: string) => { await api.post(`/batches/${id}/qc`, { result, notes }); await refresh('batches', 'audit'); },
+    releaseBatch: async (id: number, expiry?: string) => {
+      await api.post(`/batches/${id}/release`, { expiry });
+      await refresh('batches', 'items', 'movements', 'audit');
+    },
+    rejectBatch: async (id: number, reason: string) => { await api.post(`/batches/${id}/reject`, { reason }); await refresh('batches', 'audit'); },
 
     addExpense: (e: Omit<Expense, 'id' | 'ref' | 'status'>) => mutate((d) => {
       if (e.amount <= 0) throw new Error('Amount must be more than zero.');
