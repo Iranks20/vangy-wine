@@ -56,7 +56,7 @@ export function masterRoutes({ db, auth }: Ctx) {
     const b = parse(newItemSchema, req.body);
     const id = await db().transaction(async (trx) => {
       if (await trx('items').where({ code: b.code }).first()) throw conflict('That item code is already used.');
-      const [itemId] = await trx('items').insert({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location, cost: b.cost });
+      const [{ id: itemId }] = await trx('items').insert({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location, cost: b.cost }).returning('id');
       if (b.qty > 0) await stockIn(trx, { itemId, qty: b.qty, unitCost: b.cost, type: 'Opening stock', ref: 'OPENING', user });
       await audit(trx, user, 'Item created', `${b.code} — ${b.name}`);
       return itemId;
@@ -127,7 +127,7 @@ export function masterRoutes({ db, auth }: Ctx) {
     router.get(o.path, async (_req, res) => { res.json(await o.load(db())); });
     router.post(o.path, async (req, res) => {
       const b = parse(o.schema, req.body);
-      const [id] = await db()(o.table).insert(o.toRow(b));
+      const [{ id }] = await db()(o.table).insert(o.toRow(b)).returning('id');
       await audit(db(), currentUser(req).name, `${o.label} added`, b.name);
       res.status(201).json(await one(id));
     });

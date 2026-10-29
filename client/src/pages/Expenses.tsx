@@ -104,7 +104,7 @@ export default function Expenses() {
           <Field label="Paid from"><Select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value as Method })}>{(['cash', 'mobile_money', 'bank'] as const).map((m) => <option key={m} value={m}>{methodLabel[m]}</option>)}</Select></Field>
           <Field label="Paid to"><Input value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} /></Field>
           <Field label="Receipt / reference"><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></Field>
-          <Field label="Attachment (receipt photo or PDF, up to 4 MB)" className="sm:col-span-2"><Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
+          <Field label="Attachment (receipt photo or PDF, up to 3 MB)" className="sm:col-span-2"><Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
         </div>
       </Modal>
       <Modal open={!!view} onClose={() => setView(null)} title={view ? `${view.ref} — ${view.category}` : ''}

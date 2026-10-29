@@ -80,11 +80,13 @@ export function insightRoutes({ db, auth }: Ctx) {
     }
     if (!Array.isArray(b.tables.settings) || !b.tables.settings.length) throw badRequest('The backup has no business settings, so it is incomplete.');
 
-    const [cols] = await db().raw('SELECT TABLE_NAME AS t, COLUMN_NAME AS c, DATA_TYPE AS d FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()');
+    const { rows: cols } = await db().raw("SELECT table_name AS t, column_name AS c, data_type AS d, column_default AS def FROM information_schema.columns WHERE table_schema = current_schema()");
     const types = new Map<string, Map<string, string>>();
-    for (const { t, c, d } of cols as { t: string; c: string; d: string }[]) {
+    const serial = new Set<string>(); // tables whose id comes from a sequence, which must be moved past the restored ids
+    for (const { t, c, d, def } of cols as { t: string; c: string; d: string; def: string | null }[]) {
       if (!types.has(t)) types.set(t, new Map());
       types.get(t)!.set(c, d);
+      if (c === 'id' && def?.startsWith('nextval(')) serial.add(t);
     }
     const convert = (table: string, row: Record<string, unknown>) => {
       const out: Record<string, unknown> = {};
@@ -92,9 +94,10 @@ export function insightRoutes({ db, auth }: Ctx) {
         const type = types.get(table)?.get(k);
         if (!type) continue; // ignore columns this version does not have
         if (v === null) out[k] = null;
-        else if (type === 'datetime' || type === 'timestamp') out[k] = new Date(v as string);
-        else if (type === 'json') out[k] = typeof v === 'string' ? v : JSON.stringify(v);
-        else if (type.endsWith('blob')) out[k] = Buffer.from((v as { $base64: string }).$base64 ?? '', 'base64');
+        else if (type.startsWith('timestamp')) out[k] = new Date(v as string);
+        else if (type === 'json' || type === 'jsonb') out[k] = typeof v === 'string' ? v : JSON.stringify(v);
+        else if (type === 'bytea') out[k] = Buffer.from((v as { $base64: string }).$base64 ?? '', 'base64');
+        else if (type === 'boolean') out[k] = Boolean(v); // backups made on MySQL store these as 0/1
         else out[k] = v;
       }
       return out;
@@ -102,16 +105,13 @@ export function insightRoutes({ db, auth }: Ctx) {
 
     const counts: Record<string, number> = {};
     await db().transaction(async (trx) => {
-      await trx.raw('SET FOREIGN_KEY_CHECKS = 0');
-      try {
-        for (const t of [...BACKUP_TABLES].reverse()) await trx(t).delete(); // DELETE, not TRUNCATE: TRUNCATE would end the transaction
-        for (const t of BACKUP_TABLES) {
-          const rows = ((b.tables![t] ?? []) as Record<string, unknown>[]).map((row) => convert(t, row));
-          for (let i = 0; i < rows.length; i += 500) await trx(t).insert(rows.slice(i, i + 500));
-          counts[t] = rows.length;
-        }
-      } finally {
-        await trx.raw('SET FOREIGN_KEY_CHECKS = 1');
+      // BACKUP_TABLES lists parents before children, so deleting in reverse and inserting in order keeps foreign keys valid.
+      for (const t of [...BACKUP_TABLES].reverse()) await trx(t).delete();
+      for (const t of BACKUP_TABLES) {
+        const rows = ((b.tables![t] ?? []) as Record<string, unknown>[]).map((row) => convert(t, row));
+        for (let i = 0; i < rows.length; i += 500) await trx(t).insert(rows.slice(i, i + 500));
+        counts[t] = rows.length;
+        if (serial.has(t)) await trx.raw("SELECT setval(pg_get_serial_sequence(?, 'id'), COALESCE(MAX(id), 0) + 1, false) FROM ??", [t, t]);
       }
       await audit(trx, currentUser(req).name, 'Restore', `Backup from ${b && (b as { createdAt?: string }).createdAt} restored`);
     });

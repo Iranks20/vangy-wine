@@ -25,7 +25,7 @@ export async function saveRecipe(db: Db, user: string, id: number | null, b: { n
       if (!(await trx('recipes').where({ id: rid }).update({ name: b.name, base_litres: b.baseLitres }))) throw notFound('Recipe');
       await trx('recipe_lines').where({ recipe_id: rid }).delete();
     } else {
-      [rid] = await trx('recipes').insert({ name: b.name, base_litres: b.baseLitres });
+      [{ id: rid }] = await trx('recipes').insert({ name: b.name, base_litres: b.baseLitres }).returning('id');
     }
     if (b.lines.length) await trx('recipe_lines').insert(b.lines.map((l) => ({ recipe_id: rid, item_id: l.itemId, qty: l.qty })));
     await audit(trx, user, id ? 'Recipe updated' : 'Recipe created', b.name);
@@ -80,7 +80,7 @@ const stage = (trx: Tx, batchId: number, name: string, notes: string) =>
 export async function createBatch(db: Db, user: string, b: { expectedLitres: number; responsible?: string; materials: Material[] }) {
   const id = await db.transaction(async (trx) => {
     const batchNo = await nextNumber(trx, 'B', 3);
-    const [bid] = await trx('batches').insert({ batch_no: batchNo, start_date: new Date(), responsible: b.responsible?.trim() || user, expected_litres: b.expectedLitres, stage: 'Preparation' });
+    const [{ id: bid }] = await trx('batches').insert({ batch_no: batchNo, start_date: new Date(), responsible: b.responsible?.trim() || user, expected_litres: b.expectedLitres, stage: 'Preparation' }).returning('id');
     await trx('batch_stages').insert({ batch_id: bid, stage: 'Preparation', date: new Date(), notes: 'Batch started' });
     await consume(trx, bid, batchNo, user, b.materials);
     await audit(trx, user, 'Batch created', `${batchNo} — ${b.expectedLitres} L expected`);

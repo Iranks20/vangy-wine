@@ -5,7 +5,7 @@ type Conn = Db | Tx;
 // Document numbers like INV-2026-00001. Row-locked so two requests never get the same number.
 export async function nextNumber(trx: Tx, prefix: string, pad: number) {
   const name = `${prefix}-${new Date().getFullYear()}`;
-  await trx.raw('INSERT INTO counters (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [name]);
+  await trx.raw('INSERT INTO counters (name, value) VALUES (?, 0) ON CONFLICT (name) DO NOTHING', [name]);
   const row = await trx('counters').where({ name }).forUpdate().first();
   const value = Number(row.value) + 1;
   await trx('counters').where({ name }).update({ value });

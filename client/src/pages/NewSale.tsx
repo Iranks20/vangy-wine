@@ -4,24 +4,75 @@ import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { newIdemKey } from '../lib/api';
 import { Link } from 'react-router-dom';
-import { methodLabel, ugx } from '../lib/format';
+import { categoryLabel, methodLabel, num, ugx } from '../lib/format';
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Textarea, cx, useToast } from '../components/ui';
-import type { Method } from '../lib/types';
+import type { Item, Method } from '../lib/types';
 
 type Line = { itemId: number; qty: number; price: number; discount: number };
+const lineFor = (p: Item): Line => ({ itemId: p.id, qty: 1, price: p.price, discount: 0 });
 
 export default function NewSale() {
+  const { db } = useStore();
+  const products = db.items.filter((i) => i.category === 'finished');
+  // The form only mounts once something can be sold, so its first line always points at a real product.
+  return products.length ? <SaleForm products={products} /> : <NoProducts />;
+}
+
+// Shown when no item is a finished product: lets the user make an existing item sellable, with its price.
+function NoProducts() {
+  const { db, saveItem } = useStore();
+  const toast = useToast();
+  const [prices, setPrices] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState<number | null>(null);
+
+  const makeSellable = async (i: Item) => {
+    const price = Number(prices[i.id] ?? i.price);
+    if (!(price > 0)) return toast.error(`Enter the selling price of ${i.name} first.`);
+    setBusy(i.id);
+    try { await saveItem({ ...i, category: 'finished', price }); toast.success(`${i.name} can now be sold`); } catch (e) { toast.error((e as Error).message); setBusy(null); }
+  };
+
+  return (
+    <>
+      <PageHeader title="New sale" />
+      {db.items.length ? (
+        <Card title="None of your items can be sold yet">
+          <p className="mb-4 text-sm text-stone-600">
+            Only items in the <b>Finished product</b> category appear on a sale. Your {db.items.length === 1 ? 'item is' : `${db.items.length} items are`} saved under another category.
+            If an item below is wine (or anything else) you sell to customers, enter its selling price and make it sellable. Raw materials and packaging should stay as they are.
+          </p>
+          <ul className="divide-y divide-stone-100">
+            {db.items.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-end justify-between gap-3 py-3 text-sm">
+                <div className="min-w-0 flex-1"><p className="font-medium">{i.name}</p><p className="text-xs text-stone-500">{i.code} · {categoryLabel[i.category]} · {num(i.qty, 2)} {i.unit} in stock</p></div>
+                <div className="flex items-end gap-2">
+                  <Field label="Selling price (UGX)" className="w-36">
+                    <Input type="number" min={0} inputMode="numeric" value={prices[i.id] ?? (i.price || '')} placeholder="0" onChange={(e) => setPrices({ ...prices, [i.id]: e.target.value })} />
+                  </Field>
+                  <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => makeSellable(i)}>{busy === i.id ? 'Saving…' : 'Make sellable'}</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : (
+        <Empty title="No products to sell yet" text="Add your finished products (for example the 750ml and 1.5L bottles) in Inventory, with the category Finished product." action={<Link to="/inventory" className="text-sm font-medium text-wine-700 hover:underline">Go to Inventory</Link>} />
+      )}
+    </>
+  );
+}
+
+function SaleForm({ products }: { products: Item[] }) {
   const { db, user, addSale } = useStore();
   const nav = useNavigate();
   const toast = useToast();
-  const products = db.items.filter((i) => i.category === 'finished');
 
   const [params] = useSearchParams();
   const [customerId, setCustomerId] = useState<number | ''>(() => { const c = Number(params.get('customer')); return db.customers.some((x) => x.id === c) ? c : ''; });
   const [salesperson, setSalesperson] = useState(user!.name);
   const [walkName, setWalkName] = useState('');
   const [walkPhone, setWalkPhone] = useState('');
-  const [lines, setLines] = useState<Line[]>([{ itemId: products[0]?.id, qty: 1, price: products[0]?.price ?? 0, discount: 0 }]);
+  const [lines, setLines] = useState<Line[]>(() => [lineFor(products[0])]);
   const [method, setMethod] = useState<Method | 'credit'>('cash');
   const [paidInput, setPaidInput] = useState<string | null>(null);
   const [delivery, setDelivery] = useState('');
@@ -48,13 +99,6 @@ export default function NewSale() {
       nav(`/sales/${sale.id}`, { replace: true });
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
-
-  if (!products.length) return (
-    <>
-      <PageHeader title="New sale" />
-      <Empty title="No products to sell yet" text="Add your finished products (for example the 750ml and 1.5L bottles) in Inventory first." action={<Link to="/inventory" className="text-sm font-medium text-wine-700 hover:underline">Go to Inventory</Link>} />
-    </>
-  );
 
   return (
     <>
@@ -83,7 +127,7 @@ export default function NewSale() {
             </div>
           </Card>
 
-          <Card title="Products" action={<Button size="sm" variant="ghost" onClick={() => setLines([...lines, { itemId: products[0].id, qty: 1, price: products[0].price, discount: 0 }])}><Plus size={16} />Add line</Button>}>
+          <Card title="Products" action={<Button size="sm" variant="ghost" onClick={() => setLines([...lines, lineFor(products[0])])}><Plus size={16} />Add line</Button>}>
             <div className="space-y-3">
               {lines.map((l, i) => {
                 const it = db.items.find((x) => x.id === l.itemId)!;

@@ -9,13 +9,9 @@ const KEEP = new Set(['users', 'settings', 'knex_migrations', 'knex_migrations_l
 
 // Empties every business table so each test file starts from a clean, empty database.
 export async function resetData(db: Db) {
-  const [tables] = await db.raw('SHOW TABLES');
-  await db.raw('SET FOREIGN_KEY_CHECKS = 0');
-  for (const row of tables as Record<string, string>[]) {
-    const name = Object.values(row)[0];
-    if (!KEEP.has(name)) await db.raw('TRUNCATE TABLE ??', [name]);
-  }
-  await db.raw('SET FOREIGN_KEY_CHECKS = 1');
+  const { rows } = await db.raw('SELECT tablename FROM pg_tables WHERE schemaname = current_schema()');
+  const names = (rows as { tablename: string }[]).map((r) => r.tablename).filter((n) => !KEEP.has(n));
+  if (names.length) await db.raw(`TRUNCATE TABLE ${names.map(() => '??').join(', ')} RESTART IDENTITY CASCADE`, names);
   await db('settings').where({ id: 1 }).update({ data: JSON.stringify(DEFAULT_SETTINGS), last_backup_at: null });
 }
 

@@ -7,7 +7,8 @@ import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Tex
 import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Item, ItemCategory, Movement } from '../lib/types';
 
-const blank: Item = { id: 0, code: '', name: '', category: 'raw', unit: 'kg', price: 0, cost: 0, qty: 0, min: 0, location: '', lots: [] };
+// No category is pre-selected: the category decides whether an item can be sold, so it must be a deliberate choice.
+const blank: Item = { id: 0, code: '', name: '', category: '' as ItemCategory, unit: '', price: 0, cost: 0, qty: 0, min: 0, location: '', lots: [] };
 
 export default function Inventory() {
   const { db, saveItem, adjustStock, deleteItem } = useStore();
@@ -29,7 +30,7 @@ export default function Inventory() {
 
   const cols: Column<Item>[] = [
     { key: 'name', label: 'Item', render: (i) => <div><p className="font-medium">{i.name}</p><p className="text-xs text-stone-500">{i.code}</p></div>, value: (i) => `${i.name} ${i.code}` },
-    { key: 'category', label: 'Category', value: (i) => categoryLabel[i.category], hideOnMobile: true },
+    { key: 'category', label: 'Category', value: (i) => categoryLabel[i.category], render: (i) => <Badge tone={i.category === 'finished' ? 'wine' : 'gray'}>{categoryLabel[i.category]}</Badge> },
     { key: 'qty', label: 'In stock', align: 'right', value: (i) => i.qty, render: (i) => <span className={i.qty <= i.min ? 'font-semibold text-red-600' : ''}>{num(i.qty, 2)} {i.unit}</span> },
     { key: 'min', label: 'Min', align: 'right', hideOnMobile: true, render: (i) => num(i.min) },
     { key: 'cost', label: 'Avg cost', align: 'right', render: (i) => ugx(i.cost), hideOnMobile: true },
@@ -62,7 +63,7 @@ export default function Inventory() {
     <>
       <PageHeader title="Inventory" subtitle="Finished wine, raw materials and packaging. Valued at weighted-average cost."
         actions={<>
-          <Button variant="secondary" onClick={() => setAdj({ itemId: db.items[0].id, kind: 'damage', qty: '', reason: '' })}><SlidersHorizontal size={16} />Adjust stock</Button>
+          <Button variant="secondary" disabled={!db.items.length} onClick={() => setAdj({ itemId: db.items[0].id, kind: 'damage', qty: '', reason: '' })}><SlidersHorizontal size={16} />Adjust stock</Button>
           <Button onClick={() => setEdit({ ...blank })}><Plus size={16} />New item</Button>
         </>} />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -125,11 +126,11 @@ export default function Inventory() {
 
       {/* add / edit item */}
       <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Edit item' : 'New stock item'}
-        footer={<>{edit?.id ? <Button variant="ghost" className="mr-auto text-red-600" onClick={async () => { if (await toast.confirm({ title: `Delete ${edit.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteItem(edit.id), 'Item deleted').then((ok) => ok && setEdit(null)); }}>Delete</Button> : null}<Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); run(() => saveItem(edit!), 'Item saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
+        footer={<>{edit?.id ? <Button variant="ghost" className="mr-auto text-red-600" onClick={async () => { if (await toast.confirm({ title: `Delete ${edit.name}?`, text: 'This cannot be undone. Records that are already used in transactions cannot be deleted.', danger: true, confirmLabel: 'Delete' })) run(() => deleteItem(edit.id), 'Item deleted').then((ok) => ok && setEdit(null)); }}>Delete</Button> : null}<Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={() => { if (!edit!.code || !edit!.name) return run(() => { throw new Error('Code and name are required.'); }, ''); if (!edit!.category) return run(() => { throw new Error('Choose a category. Wine you sell must be a Finished product.'); }, ''); if (edit!.category === 'finished' && !(edit!.price > 0)) return run(() => { throw new Error('Enter the selling price. It is filled in automatically on every sale.'); }, ''); run(() => saveItem(edit!), 'Item saved').then((ok) => ok && setEdit(null)); }}>Save</Button></>}>
         {edit && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Code"><Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
-            <Field label="Category"><Select value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value as ItemCategory })}>{Object.entries(categoryLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field>
+            <Field label="Category" hint="Only Finished products can be sold."><Select value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value as ItemCategory })}><option value="" disabled>Choose a category…</option>{Object.entries(categoryLabel).map(([k, v]) => <option key={k} value={k}>{v}{k === 'finished' ? ' (sold to customers)' : ''}</option>)}</Select></Field>
             <Field label="Name" className="col-span-2"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
             <Field label="Unit of measure"><Input value={edit.unit} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="kg, bottle, pcs" /></Field>
             <Field label="Minimum level"><Input type="number" value={edit.min} onChange={(e) => setEdit({ ...edit, min: Number(e.target.value) })} /></Field>

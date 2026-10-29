@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Lock } from 'lucide-react';
+import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { Logo } from '../components/Layout';
 import { Button, Field, Input } from '../components/ui';
@@ -8,6 +8,7 @@ export default function Login() {
   const { db, login } = useStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +40,15 @@ export default function Login() {
             <p className="text-sm text-stone-500">Welcome back.</p>
           </div>
           <Field label="Username"><Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus /></Field>
-          <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></Field>
+          <Field label="Password">
+            <div className="relative">
+              <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" className="pr-10" />
+              <button type="button" onClick={() => setShowPassword((s) => !s)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-stone-400 hover:text-wine-700">
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </Field>
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           <Button type="submit" className="w-full" disabled={busy}><Lock size={16} />{busy ? 'Signing in…' : 'Sign in'}</Button>
         </form>

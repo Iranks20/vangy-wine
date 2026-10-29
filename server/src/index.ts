@@ -1,6 +1,6 @@
 import { config } from './config';
 import { createApp } from './app';
-import { assertInnoDb, createDb, ensureDatabase, migrateLatest } from './db';
+import { createDb, ensureDatabase, migrateLatest } from './db';
 import { ensureAdmin } from './services/auth';
 
 async function main() {
@@ -8,7 +8,6 @@ async function main() {
   const db = createDb();
   const [, applied] = await migrateLatest(db);
   if (applied.length) console.log(`Migrations applied: ${applied.join(', ')}`);
-  await assertInnoDb(db);
   if (await ensureAdmin(db)) console.log(`Created login for ${config.admin!.username}`);
   if (!(await db('users').first())) console.warn('No login exists yet — set ADMIN_USERNAME and ADMIN_PASSWORD and restart.');
 

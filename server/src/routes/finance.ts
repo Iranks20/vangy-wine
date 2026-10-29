@@ -17,7 +17,7 @@ type Conn = Db | Tx;
 type Method = 'cash' | 'mobile_money' | 'bank';
 const method = z.enum(['cash', 'mobile_money', 'bank'], { errorMap: () => ({ message: 'Choose cash, mobile money or bank.' }) });
 const amount = z.coerce.number({ invalid_type_error: 'Amount must be a number.' }).int('Amount must be whole shillings.').positive('Amount must be more than zero.');
-const MAX_ATTACHMENT = 4 * 1024 * 1024;
+const MAX_ATTACHMENT = 3 * 1024 * 1024; // base64 in JSON must stay under Vercel's 4.5 MB request limit
 const ATTACHMENT_TYPES = /^(image\/(png|jpe?g|webp|heic|gif)|application\/pdf)$/;
 
 export async function loadExpenses(db: Conn): Promise<Expense[]> {
@@ -72,11 +72,11 @@ export function financeRoutes({ db, auth }: Ctx) {
     if (b.attachment) {
       if (!ATTACHMENT_TYPES.test(b.attachment.mime)) throw badRequest('Attach a photo (JPG, PNG) or a PDF.');
       file = Buffer.from(b.attachment.data, 'base64');
-      if (file.length > MAX_ATTACHMENT) throw badRequest('The attachment is larger than 4 MB.');
+      if (file.length > MAX_ATTACHMENT) throw badRequest('The attachment is larger than 3 MB.');
     }
     const id = await db().transaction(async (trx) => {
       const ref = await nextNumber(trx, 'EXP', 4);
-      const [eid] = await trx('expenses').insert({ ref, date, category: b.category, description: b.description, amount: b.amount, method: b.method, recipient: b.recipient, reference: b.reference || null });
+      const [{ id: eid }] = await trx('expenses').insert({ ref, date, category: b.category, description: b.description, amount: b.amount, method: b.method, recipient: b.recipient, reference: b.reference || null }).returning('id');
       if (file) await trx('expense_attachments').insert({ expense_id: eid, filename: b.attachment!.filename, mime: b.attachment!.mime, data: file });
       await audit(trx, user(req), 'Expense recorded', `${ref} — ${b.description} — ${b.amount.toLocaleString()}`);
       return eid;
@@ -97,7 +97,7 @@ export function financeRoutes({ db, auth }: Ctx) {
       if (b.attachment) {
         if (!ATTACHMENT_TYPES.test(b.attachment.mime)) throw badRequest('Attach a photo (JPG, PNG) or a PDF.');
         const file = Buffer.from(b.attachment.data, 'base64');
-        if (file.length > MAX_ATTACHMENT) throw badRequest('The attachment is larger than 4 MB.');
+        if (file.length > MAX_ATTACHMENT) throw badRequest('The attachment is larger than 3 MB.');
         await trx('expense_attachments').where({ expense_id: id }).delete();
         await trx('expense_attachments').insert({ expense_id: id, filename: b.attachment.filename, mime: b.attachment.mime, data: file });
       }
@@ -137,7 +137,7 @@ export function financeRoutes({ db, auth }: Ctx) {
       date: z.string().optional(),
     }), req.body);
     const direction = b.category === 'Other payment' ? 'out' : 'in';
-    const [id] = await db()('cash_entries').insert({ date: b.date ? new Date(b.date) : new Date(), direction, amount: b.amount, method: b.method, description: b.description, category: b.category });
+    const [{ id }] = await db()('cash_entries').insert({ date: b.date ? new Date(b.date) : new Date(), direction, amount: b.amount, method: b.method, description: b.description, category: b.category }).returning('id');
     await audit(db(), user(req), 'Cashbook entry', `${b.category} — ${b.description} — ${b.amount.toLocaleString()}`);
     res.status(201).json((await loadCash(db())).find((c) => c.id === id));
   });
@@ -146,20 +146,17 @@ export function financeRoutes({ db, auth }: Ctx) {
     const b = parse(z.object({ from: method, to: method, amount, description: z.string().trim().min(1, 'Description is required.').max(255) }), req.body);
     if (b.from === b.to) throw badRequest('Choose two different accounts.');
     await db().transaction(async (trx) => {
-      await trx.raw('SELECT GET_LOCK(?, 10)', ['vangy-cash-transfer']); // one transfer at a time, so balances cannot race
-      try {
-        const available = await balanceOf(trx, b.from);
-        if (b.amount > available) throw badRequest(`${LABEL[b.from]} only has ${available.toLocaleString()} available.`);
-        const date = new Date();
-        const group = randomUUID();
-        await trx('cash_entries').insert([
-          { date, direction: 'out', amount: b.amount, method: b.from, description: b.description, category: 'Transfer', group_ref: group },
-          { date, direction: 'in', amount: b.amount, method: b.to, description: b.description, category: 'Transfer', group_ref: group },
-        ]);
-        await audit(trx, user(req), 'Transfer', `${LABEL[b.from]} → ${LABEL[b.to]} — ${b.amount.toLocaleString()}`);
-      } finally {
-        await trx.raw('SELECT RELEASE_LOCK(?)', ['vangy-cash-transfer']);
-      }
+      // One transfer at a time, so balances cannot race. The lock is released when the transaction ends.
+      await trx.raw("SELECT pg_advisory_xact_lock(hashtext('vangy-cash-transfer'))");
+      const available = await balanceOf(trx, b.from);
+      if (b.amount > available) throw badRequest(`${LABEL[b.from]} only has ${available.toLocaleString()} available.`);
+      const date = new Date();
+      const group = randomUUID();
+      await trx('cash_entries').insert([
+        { date, direction: 'out', amount: b.amount, method: b.from, description: b.description, category: 'Transfer', group_ref: group },
+        { date, direction: 'in', amount: b.amount, method: b.to, description: b.description, category: 'Transfer', group_ref: group },
+      ]);
+      await audit(trx, user(req), 'Transfer', `${LABEL[b.from]} → ${LABEL[b.to]} — ${b.amount.toLocaleString()}`);
     });
     res.status(201).json(await loadCash(db()));
   });
@@ -185,7 +182,7 @@ export function financeRoutes({ db, auth }: Ctx) {
   r.post('/reconciliations', async (req, res) => {
     const b = parse(z.object({ method, counted: z.coerce.number().int('Counted amount must be whole shillings.').min(0, 'Counted amount cannot be negative.'), notes: z.string().trim().max(500).optional() }), req.body);
     const system = await balanceOf(db(), b.method);
-    const [id] = await db()('reconciliations').insert({ date: new Date(), method: b.method, system_amount: system, counted: b.counted, difference: b.counted - system, notes: b.notes || null, user_name: user(req) });
+    const [{ id }] = await db()('reconciliations').insert({ date: new Date(), method: b.method, system_amount: system, counted: b.counted, difference: b.counted - system, notes: b.notes || null, user_name: user(req) }).returning('id');
     await audit(db(), user(req), 'Cash count', `${LABEL[b.method]}: counted ${b.counted.toLocaleString()}, system ${system.toLocaleString()}`);
     res.status(201).json((await loadReconciliations(db())).find((x) => x.id === id));
   });

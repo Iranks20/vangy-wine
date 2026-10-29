@@ -4,3 +4,7 @@ data/
 *.db
 *.tsbuildinfo
 .env
+
+.vercel
+.env*
+!.env.example

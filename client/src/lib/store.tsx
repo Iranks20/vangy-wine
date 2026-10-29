@@ -10,7 +10,7 @@ import type {
 export * from '../../../shared/calc';
 
 const fileToBase64 = (f: File) => new Promise<string>((resolve, reject) => {
-  if (f.size > 4 * 1024 * 1024) return reject(new Error('The attachment is larger than 4 MB.'));
+  if (f.size > 3 * 1024 * 1024) return reject(new Error('The attachment is larger than 3 MB.'));
   const r = new FileReader();
   r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
   r.onerror = () => reject(new Error('Could not read the file.'));

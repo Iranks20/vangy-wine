@@ -17,14 +17,14 @@ export const hashPassword = (p: string) => bcrypt.hash(p, 10);
 
 export async function ensureAdmin(db: Db) {
   if (!config.admin) return false;
-  const exists = await db('users').where({ username: config.admin.username }).first();
+  const exists = await db('users').whereRaw('lower(username) = lower(?)', [config.admin.username]).first();
   if (exists) return false;
   await db('users').insert({ username: config.admin.username, name: config.admin.name, password_hash: await hashPassword(config.admin.password) });
   return true;
 }
 
 export async function login(db: Db, username: string, password: string) {
-  const u = await db('users').where({ username: username.trim() }).first();
+  const u = await db('users').whereRaw('lower(username) = lower(?)', [username.trim()]).first();
   // Compare even when the user is missing so response time does not reveal valid usernames.
   const ok = await bcrypt.compare(password, u?.password_hash ?? '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
   if (!u || !ok) return null;

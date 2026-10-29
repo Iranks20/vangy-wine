@@ -38,7 +38,7 @@ export async function createPurchase(db: Db, user: string, b: { supplierId: numb
     if (!supplier) throw badRequest('Choose a supplier.');
     for (const l of b.lines) if (!(await trx('items').where({ id: l.itemId }).first())) throw badRequest('An item on this order no longer exists.');
     const po = await nextNumber(trx, 'PO', 4);
-    const [pid] = await trx('purchases').insert({ po, supplier_id: supplier.id, supplier_invoice: b.supplierInvoice?.trim() || null, date: b.date ? new Date(b.date) : new Date(), transport: b.transport, status: 'ordered' });
+    const [{ id: pid }] = await trx('purchases').insert({ po, supplier_id: supplier.id, supplier_invoice: b.supplierInvoice?.trim() || null, date: b.date ? new Date(b.date) : new Date(), transport: b.transport, status: 'ordered' }).returning('id');
     await trx('purchase_lines').insert(b.lines.map((l) => ({ purchase_id: pid, item_id: l.itemId, qty: l.qty, cost: l.cost })));
     await audit(trx, user, 'Purchase order created', `${po} — ${supplier.name}`);
     return pid;

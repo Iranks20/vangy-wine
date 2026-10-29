@@ -66,13 +66,13 @@ export async function createSale(db: Db, user: string, input: NewSaleInput) {
     if (paid < total && !customer) throw badRequest('Credit or part-payment needs a registered customer, so the debt can be tracked.');
 
     const invoice = await nextNumber(trx, settings.invoicePrefix, 5);
-    const [saleId] = await trx('sales').insert({
+    const [{ id: saleId }] = await trx('sales').insert({
       invoice, date, customer_id: customer?.id ?? null,
       customer_name: customer?.name ?? (input.customerName?.trim() || 'Walk-in customer'),
       customer_phone: customer?.phone || input.customerPhone?.trim() || null,
       salesperson: input.salesperson?.trim() || user, delivery: input.delivery?.trim() || null, notes: input.notes?.trim() || null,
       status: 'completed', due_date: localDay(addDays(date, customer?.terms ?? 0)), idem_key: input.idemKey ?? null,
-    });
+    }).returning('id');
 
     for (const l of input.lines) {
       const item = await trx('items').where({ id: l.itemId }).first();

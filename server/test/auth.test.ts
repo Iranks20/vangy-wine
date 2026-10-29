@@ -13,13 +13,18 @@ describe('health', () => {
 });
 
 describe('database', () => {
-  it('uses InnoDB for every table so transactions and foreign keys work', async () => {
-    const { assertInnoDb } = await import('../src/db');
-    await expect(assertInnoDb(api.ctx.db)).resolves.toBeUndefined();
+  it('returns BIGINT/NUMERIC as numbers and DATE as a plain YYYY-MM-DD string', async () => {
+    const { rows: [r] } = await api.ctx.db.raw("SELECT 9007199254740::bigint AS money, 12.345::numeric(14,3) AS qty, DATE '2026-03-01' AS day");
+    expect(r).toEqual({ money: 9007199254740, qty: 12.345, day: '2026-03-01' });
   });
 });
 
 describe('auth', () => {
+  it('accepts the username in any letter case', async () => {
+    const res = await api.anon().post('/api/auth/login').send({ username: TEST_ENV.ADMIN_USERNAME.toUpperCase(), password: TEST_ENV.ADMIN_PASSWORD });
+    expect(res.status).toBe(200);
+  });
+
   it('created the director login from the environment during migration', async () => {
     const u = await api.ctx.db('users').where({ username: TEST_ENV.ADMIN_USERNAME }).first();
     expect(u.name).toBe(TEST_ENV.ADMIN_NAME);

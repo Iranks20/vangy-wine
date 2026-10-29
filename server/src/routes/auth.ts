@@ -25,7 +25,7 @@ export function authRoutes({ db, auth }: Ctx) {
   r.put('/profile', auth, async (req, res) => {
     const u = currentUser(req);
     const body = parse(z.object({ name: z.string().trim().min(1, 'Name is required.').max(120), username: z.string().trim().min(3, 'Username must be at least 3 characters.').max(60) }), req.body);
-    const taken = await db()('users').where({ username: body.username }).whereNot({ id: u.id }).first();
+    const taken = await db()('users').whereRaw('lower(username) = lower(?)', [body.username]).whereNot({ id: u.id }).first();
     if (taken) throw conflict('That username is already taken.');
     await db()('users').where({ id: u.id }).update(body);
     await audit(db(), body.name, 'Profile updated', `Name/username changed`);

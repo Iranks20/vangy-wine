@@ -10,7 +10,7 @@ call npm --prefix server run build || (pause & exit /b 1)
 call npm --prefix client run build || (pause & exit /b 1)
 start "Vangy Wine API" cmd /k "cd /d %~dp0server && npm start"
 echo.
-echo  Vangy Wine is starting. Make sure MySQL is running (XAMPP control panel).
+echo  Vangy Wine is starting. Make sure PostgreSQL is running (or DATABASE_URL is set in server\.env).
 echo  On this laptop:          http://localhost:4173
 echo  On a phone (same Wi-Fi): use the "Network" address shown below.
 echo  Close both windows to stop.
