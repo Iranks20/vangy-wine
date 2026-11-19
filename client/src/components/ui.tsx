@@ -65,14 +65,14 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
-export function Stat({ label, value, hint, tone = 'wine', icon }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'wine' | 'gold' | 'green' | 'red' | 'gray'; icon?: ReactNode }) {
-  const bar = { wine: 'bg-wine-700', gold: 'bg-gold-400', green: 'bg-emerald-500', red: 'bg-red-500', gray: 'bg-stone-400' }[tone];
+// `tone` is accepted for existing callers but no longer draws a coloured edge strip.
+export function Stat({ label, value, hint, icon }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'wine' | 'gold' | 'green' | 'red' | 'gray'; icon?: ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-      <span className={cx('absolute inset-y-0 left-0 w-1', bar)} />
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>
-        {icon && <span className="text-stone-400">{icon}</span>}
+    <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+      {/* Fixed-height label row so cards with and without an icon line their figures up. */}
+      <div className="flex h-4 items-center justify-between gap-2">
+        <p className="truncate text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>
+        {icon && <span className="shrink-0 text-stone-400">{icon}</span>}
       </div>
       <p className="mt-1.5 text-lg font-bold leading-tight text-charcoal sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-stone-500">{hint}</p>}
