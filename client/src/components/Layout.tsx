@@ -27,10 +27,7 @@ export const NAV: { to: string; label: string; icon: typeof Boxes }[] = [
 export function Logo({ light }: { light?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <svg viewBox="0 0 32 32" className="h-9 w-9 shrink-0" aria-hidden>
-        <rect width="32" height="32" rx="8" fill={light ? '#ffffff1a' : '#6b1d2f'} />
-        <path d="M11 6h10c0 6-1.5 10-5 10s-5-4-5-10zm5 10v8m-4 2h8" stroke="#d4a64a" strokeWidth="2" fill="none" strokeLinecap="round" />
-      </svg>
+      <img src="/brand/logo-mark-128.png" alt="" width={40} height={40} className={cx('h-10 w-10 shrink-0 rounded-lg object-cover', light && 'ring-1 ring-gold-300/30')} />
       <div className="leading-tight">
         <p className={cx('font-display text-lg font-bold', light ? 'text-white' : 'text-wine-800')}>Vangy Wine</p>
         <p className={cx('text-[11px] uppercase tracking-widest', light ? 'text-gold-300' : 'text-gold-500')}>Business Manager</p>

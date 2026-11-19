@@ -26,6 +26,8 @@ export default function Login() {
         <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-gold-400/10" />
         <Logo light />
         <div className="relative max-w-md">
+          <img src="/brand/logo-full.jpg" alt="Vangy Wine — In vino virtus, est. 2010" width={646} height={340}
+            className="mb-8 w-full rounded-2xl shadow-2xl ring-1 ring-gold-300/20" />
           <h1 className="font-display text-4xl font-bold leading-tight">Hibiscus Natural Sweet Red Wine — run the whole business from one place.</h1>
           <p className="mt-4 text-wine-100/80">Sales, stock, production batches, purchases, expenses and cash — all in step, on your laptop or phone.</p>
         </div>

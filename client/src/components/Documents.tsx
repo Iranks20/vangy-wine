@@ -9,10 +9,7 @@ function Letterhead({ s, title, rows }: { s: Settings; title: string; rows: [str
   return (
     <div className="flex flex-col justify-between gap-5 border-b-4 border-wine-700 pb-5 sm:flex-row">
       <div className="flex min-w-0 gap-3">
-        <svg viewBox="0 0 32 32" className="h-14 w-14 shrink-0" aria-hidden>
-          <rect width="32" height="32" rx="8" fill="#6b1d2f" />
-          <path d="M11 6h10c0 6-1.5 10-5 10s-5-4-5-10zm5 10v8m-4 2h8" stroke="#d4a64a" strokeWidth="2" fill="none" strokeLinecap="round" />
-        </svg>
+        <img src="/brand/logo-mark-256.png" alt="" width={72} height={72} className="h-[72px] w-[72px] shrink-0 rounded-lg object-cover" />
         <div className="min-w-0 text-sm leading-relaxed text-stone-600">
           <p className="font-display text-xl font-bold text-wine-800">{s.businessName}</p>
           <p>{s.address}</p>
