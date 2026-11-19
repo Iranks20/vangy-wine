@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ButtonHTMLAttributes, type CSSProperties,type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { AlertTriangle, CheckCircle2, Inbox, X, XCircle } from 'lucide-react';
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(' ');
@@ -76,6 +76,67 @@ export function Stat({ label, value, hint, tone = 'wine', icon }: { label: strin
       </div>
       <p className="mt-1.5 text-lg font-bold leading-tight text-charcoal sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-stone-500">{hint}</p>}
+    </div>
+  );
+}
+
+/** Grey placeholder block shown while content loads. Size it with className (e.g. "h-4 w-24"). */
+export function Skeleton({ className, style }: { className?: string; style?: CSSProperties }) {
+  return <div aria-hidden style={style} className={cx('rounded-md bg-stone-200/70 motion-safe:animate-pulse', className)} />;
+}
+
+/** Placeholder rows shaped like a DataTable. */
+export function TableSkeleton({ rows = 8, cols = 5 }: { rows?: number; cols?: number }) {
+  const widths = ['w-3/4', 'w-1/2', 'w-2/3', 'w-1/3', 'w-3/5', 'w-2/5'];
+  return (
+    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      <div className="flex gap-4 border-b border-stone-200 bg-stone-50 px-4 py-3">
+        {Array.from({ length: cols }, (_, c) => <div key={c} className="flex-1"><Skeleton className="h-3 w-16" /></div>)}
+      </div>
+      <div className="divide-y divide-stone-100">
+        {Array.from({ length: rows }, (_, r) => (
+          <div key={r} className="flex gap-4 px-4 py-3.5">
+            {Array.from({ length: cols }, (_, c) => <div key={c} className="flex-1"><Skeleton className={cx('h-3.5', widths[(r + c) % widths.length])} /></div>)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export type SkeletonKind = 'table' | 'detail' | 'form';
+/** Whole-page placeholder used while a page's records load for the first time. */
+export function PageSkeleton({ kind = 'table' }: { kind?: SkeletonKind }) {
+  const header = <div className="mb-5 space-y-2"><Skeleton className="h-8 w-48 max-w-full" /><Skeleton className="h-4 w-80 max-w-full" /></div>;
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => <Skeleton key={i} className={cx('h-3.5', i % 3 === 2 ? 'w-1/2' : 'w-full')} />);
+  return (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">Loading…</span>
+      {kind === 'table' && (<>
+        {header}
+        <div className="mb-4 flex flex-wrap gap-2"><Skeleton className="h-10 w-64 max-w-full rounded-lg" /><Skeleton className="h-10 w-32 rounded-lg" /></div>
+        <TableSkeleton />
+      </>)}
+      {kind === 'detail' && (
+        <div className="mx-auto max-w-3xl rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex justify-between gap-4 border-b border-stone-100 pb-4">
+            <div className="space-y-2"><Skeleton className="h-6 w-44" /><Skeleton className="h-3.5 w-32" /></div>
+            <div className="space-y-2"><Skeleton className="ml-auto h-5 w-24" /><Skeleton className="h-3.5 w-28" /></div>
+          </div>
+          <div className="mb-6 space-y-2">{lines(3)}</div>
+          <TableSkeleton rows={4} cols={4} />
+          <div className="mt-5 ml-auto w-48 space-y-2">{lines(3)}</div>
+        </div>
+      )}
+      {kind === 'form' && (<>
+        {header}
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="space-y-4 rounded-xl border border-stone-200 bg-white p-4 shadow-sm lg:col-span-2">
+            {Array.from({ length: 4 }, (_, i) => <div key={i} className="space-y-1.5"><Skeleton className="h-3 w-24" /><Skeleton className="h-10 w-full rounded-lg" /></div>)}
+          </div>
+          <div className="space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">{lines(5)}<Skeleton className="mt-2 h-10 w-full rounded-lg" /></div>
+        </div>
+      </>)}
     </div>
   );
 }

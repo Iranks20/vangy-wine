@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronRight, FileSpreadsheet, Printer } from 'lucide-react'
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { downloadCsv, fmtDate, fmtDateTime, num, today, ugx } from '../lib/format';
-import { Button, Card, Field, Input, PageHeader } from '../components/ui';
+import { Button, Card, Field, Input, PageHeader, Skeleton, TableSkeleton } from '../components/ui';
 import type { Cell, Report } from '../../../shared/reports';
 
 type ReportInfo = { id: string; title: string; group: string; dated: boolean };
@@ -35,7 +35,19 @@ export default function Reports() {
     return () => { live = false; };
   }, [id, from, to, db]);
 
-  if (!list) return <div className="py-16 text-center text-sm text-stone-500">{error || 'Loading…'}</div>;
+  if (!list) return error ? <div className="py-16 text-center text-sm text-red-600">{error}</div> : (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">Loading reports…</span>
+      <div className="mb-5 space-y-2"><Skeleton className="h-8 w-40" /><Skeleton className="h-4 w-80 max-w-full" /></div>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {[5, 4, 6, 5, 4, 3].map((n, g) => (
+          <Card key={g} title={<Skeleton className="h-4 w-28" />}>
+            <ul className="space-y-4 py-1">{Array.from({ length: n }, (_, i) => <li key={i}><Skeleton className={`h-3.5 ${i % 2 ? 'w-2/3' : 'w-4/5'}`} /></li>)}</ul>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
   if (!def) return (
     <>
       <PageHeader title="Reports" subtitle={`${list.length} printable reports. Export to Excel (CSV) or save as PDF.`} />
@@ -70,7 +82,7 @@ export default function Reports() {
           <div><p className="font-display text-xl font-bold text-wine-800">{db.settings.businessName}</p><h1 className="text-lg font-semibold">{def.title}</h1></div>
           <div className="text-sm text-stone-500 sm:text-right"><p>Period: {def.dated ? `${fmtDate(from)} – ${fmtDate(to)}` : `As at ${fmtDate(today())}`}</p><p>Generated: {fmtDateTime(shown?.generatedAt ?? new Date().toISOString())}</p></div>
         </div>
-        {error ? <p className="py-8 text-center text-sm text-red-600">{error}</p> : !shown ? <p className="py-8 text-center text-sm text-stone-500">{loading ? 'Preparing report…' : ''}</p> : (
+        {error ? <p className="py-8 text-center text-sm text-red-600">{error}</p> : !shown ? (loading ? <div role="status" aria-busy="true"><span className="sr-only">Preparing report…</span><TableSkeleton rows={10} cols={5} /></div> : null) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase text-stone-500"><tr>{shown.columns.map((c, i) => <th key={c} className={`px-2 py-2 ${i && typeof shown.rows[0]?.[i] === 'number' ? 'text-right' : ''}`}>{c}</th>)}</tr></thead>

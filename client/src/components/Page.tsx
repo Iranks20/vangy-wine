@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore, type ApiKey } from '../lib/store';
-import { Button } from './ui';
+import { Button, PageSkeleton, type SkeletonKind } from './ui';
 
 // Loads the records a page needs from the API each time the page is opened, so it always shows
 // current data (including changes made on another device). Shows a loader only on the first visit.
-export function Page({ needs, children }: { needs: ApiKey[]; children: ReactNode }) {
+export function Page({ needs, children, skeleton = 'table' }: { needs: ApiKey[]; children: ReactNode; skeleton?: SkeletonKind }) {
   const { refresh, loaded } = useStore();
   const { pathname } = useLocation();
   const [error, setError] = useState('');
@@ -25,6 +25,6 @@ export function Page({ needs, children }: { needs: ApiKey[]; children: ReactNode
       <Button variant="secondary" onClick={() => setAttempt((a) => a + 1)}>Try again</Button>
     </div>
   );
-  if (!ready) return <div className="py-16 text-center text-sm text-stone-500">Loading…</div>;
+  if (!ready) return <PageSkeleton kind={skeleton} />;
   return <>{children}</>;
 }

@@ -6,7 +6,7 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import type { DashboardData, Range } from '../../../shared/dashboard';
 import { fmtDate, num, shortUgx, ugx } from '../lib/format';
-import { Badge, Card, Empty, Input, PageHeader, Stat, Tabs } from '../components/ui';
+import { Badge, Card, Empty, Input, PageHeader, Skeleton, Stat, Tabs } from '../components/ui';
 
 const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -32,7 +32,9 @@ export default function Dashboard() {
     ...r, label: d!.monthly ? new Date(r.key + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'short' }) : new Date(r.key + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
   })), [d]);
 
-  if (!d) return <div className="py-16 text-center text-sm text-stone-500">{error || 'Loading dashboard…'}</div>;
+  if (!d) return error
+    ? <div className="py-16 text-center text-sm text-red-600">{error}</div>
+    : <DashboardSkeleton />;
   const { revenue, cashIn, receivables, stockValue, produced, best, expiring, finished, recentSales, recentPurchases } = d;
   const low = d.lowStock, expTotal = d.expenses, gross = d.grossProfit, net = d.netProfit;
 
@@ -164,6 +166,55 @@ export default function Dashboard() {
           ))}
         </ul>
       </Card>
+    </div>
+  );
+}
+
+/** Same grid as the loaded dashboard, so nothing jumps when the figures arrive. */
+function DashboardSkeleton() {
+  const stat = (k: number) => (
+    <div key={k} className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="mt-3 h-6 w-28 sm:h-7" />
+      <Skeleton className="mt-2 h-3 w-32 max-w-full" />
+    </div>
+  );
+  const panel = (title: string, rows: number, className = '') => (
+    <Card title={<Skeleton className="h-4 w-32" />} className={className}>
+      <span className="sr-only">{title}</span>
+      <ul className="space-y-3">
+        {Array.from({ length: rows }, (_, i) => (
+          <li key={i} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1 space-y-1.5"><Skeleton className="h-3.5 w-3/5" /><Skeleton className="h-3 w-2/5" /></div>
+            <Skeleton className="h-4 w-16" />
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+  return (
+    <div className="space-y-5" role="status" aria-busy="true">
+      <span className="sr-only">Loading dashboard…</span>
+      <div className="mb-5 space-y-2"><Skeleton className="h-8 w-64 max-w-full" /><Skeleton className="h-4 w-80 max-w-full" /></div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3].map(stat)}</div>
+      <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3, 4, 5, 6, 7].map(stat)}</div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card title={<Skeleton className="h-4 w-36" />} className="lg:col-span-2">
+          <div className="flex h-72 items-end gap-2 px-2 pb-6">
+            {[55, 70, 40, 85, 60, 75, 45, 90, 65, 50, 80, 58].map((h, i) => (
+              <Skeleton key={i} className="flex-1 rounded-b-none" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        </Card>
+        {panel('Alerts', 3)}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        {panel('Finished wine in stock', 4)}
+        {panel('Best-selling products', 4)}
+        {panel('Recent purchases', 4)}
+      </div>
+      {panel('Recent sales', 5)}
     </div>
   );
 }
