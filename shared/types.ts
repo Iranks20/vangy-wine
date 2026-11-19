@@ -8,6 +8,8 @@ export interface Lot { lotNo: string; mfg?: string; expiry?: string; qty: number
 export interface Item {
   id: number; code: string; name: string; category: ItemCategory; unit: string;
   price: number; cost: number; qty: number; min: number; location: string;
+  /** false = discontinued: kept for history, hidden from selling lists and stock alerts. */
+  active: boolean;
   lots: Lot[];
 }
 

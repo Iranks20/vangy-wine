@@ -19,6 +19,7 @@ const itemSchema = z.object({
   price: money('Selling price').default(0),
   min: quantity('Minimum level').default(0),
   location: str(120),
+  active: z.boolean().default(true),
 });
 const newItemSchema = itemSchema.extend({ qty: quantity('Opening stock').default(0), cost: quantity('Unit cost').default(0) });
 
@@ -56,7 +57,7 @@ export function masterRoutes({ db, auth }: Ctx) {
     const b = parse(newItemSchema, req.body);
     const id = await db().transaction(async (trx) => {
       if (await trx('items').where({ code: b.code }).first()) throw conflict('That item code is already used.');
-      const [{ id: itemId }] = await trx('items').insert({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location, cost: b.cost }).returning('id');
+      const [{ id: itemId }] = await trx('items').insert({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location, active: b.active, cost: b.cost }).returning('id');
       if (b.qty > 0) await stockIn(trx, { itemId, qty: b.qty, unitCost: b.cost, type: 'Opening stock', ref: 'OPENING', user });
       await audit(trx, user, 'Item created', `${b.code} — ${b.name}`);
       return itemId;
@@ -72,7 +73,8 @@ export function masterRoutes({ db, auth }: Ctx) {
       const cur = await trx('items').where({ id }).forUpdate().first();
       if (!cur) throw notFound('Item');
       if (await trx('items').where({ code: b.code }).whereNot({ id }).first()) throw conflict('That item code is already used.');
-      await trx('items').where({ id }).update({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location });
+      await trx('items').where({ id }).update({ code: b.code, name: b.name, category: b.category, unit: b.unit, price: b.price, min_level: b.min, location: b.location, active: b.active });
+      if (cur.active !== b.active) await audit(trx, user, b.active ? 'Item reactivated' : 'Item discontinued', `${b.code} — ${b.name}`);
       if (Number(cur.price) !== b.price) await audit(trx, user, 'Price changed', `${b.name}: ${Number(cur.price).toLocaleString()} → ${b.price.toLocaleString()}`);
       await audit(trx, user, 'Item updated', `${b.code} — ${b.name}`);
     });

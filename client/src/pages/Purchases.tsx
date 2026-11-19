@@ -14,7 +14,7 @@ export default function Purchases() {
   const run = useRun();
   const toast = useToast();
   const [newOpen, setNewOpen] = useState(false);
-  const buyable = db.items.filter((i) => i.category !== 'finished');
+  const buyable = db.items.filter((i) => i.category !== 'finished' && i.active !== false);
   const blankLine = () => ({ itemId: buyable[0]?.id ?? 0, qty: 1, cost: buyable[0]?.cost ?? 0, received: 0 });
   const [form, setForm] = useState({ supplierId: db.suppliers[0]?.id, supplierInvoice: '', transport: 0, lines: [blankLine()] });
   const [editId, setEditId] = useState<number | null>(null);

@@ -1,5 +1,8 @@
 // Derived figures. Balances are always calculated from records, never stored.
-import type { Batch, Db, Method, Purchase, Sale, SaleLine } from './types';
+import type { Batch, Db, Item, Method, Purchase, Sale, SaleLine } from './types';
+
+/** Needs restocking: still stocked, has a minimum level set, and is at or below it. */
+export const isLowStock = (i: Item) => i.active !== false && i.min > 0 && i.qty <= i.min;
 
 export const lineTotal = (l: SaleLine) => l.qty * l.price - l.discount;
 export const saleTotal = (s: Sale) => s.lines.reduce((t, l) => t + lineTotal(l), 0);

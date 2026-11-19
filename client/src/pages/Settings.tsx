@@ -91,7 +91,7 @@ export default function SettingsPage() {
       {tab === 'products' && (
         <Card title="Selling prices" action={<span className="text-xs text-stone-500">Edit prices on the Inventory page</span>}>
           <ul className="divide-y divide-stone-100">
-            {db.items.filter((i) => i.category === 'finished').map((i) => (
+            {db.items.filter((i) => i.category === 'finished' && i.active !== false).map((i) => (
               <li key={i.id} className="flex items-center justify-between py-3 text-sm">
                 <div><p className="font-medium">{i.name}</p><p className="text-xs text-stone-500">{i.code} · cost {ugx(i.cost)} · margin {i.price ? Math.round((i.price - i.cost) / i.price * 100) : 0}%</p></div>
                 <span className="font-semibold">{ugx(i.price)}</span>

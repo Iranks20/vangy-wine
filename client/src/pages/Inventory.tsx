@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { ClipboardList, Download, Eye, Pencil, Plus, Printer, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../lib/store';
+import { isLowStock, useStore } from '../lib/store';
 import { categoryLabel, downloadCsv, fmtDate, fmtDateTime, num, ugx } from '../lib/format';
 import { Badge, Button, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, useRun, useToast } from '../components/ui';
 import { DataTable, type Column, type RowAction } from '../components/DataTable';
 import type { Item, ItemCategory, Movement } from '../lib/types';
 
 // No category is pre-selected: the category decides whether an item can be sold, so it must be a deliberate choice.
-const blank: Item = { id: 0, code: '', name: '', category: '' as ItemCategory, unit: '', price: 0, cost: 0, qty: 0, min: 0, location: '', lots: [] };
+const blank: Item = { id: 0, code: '', name: '', category: '' as ItemCategory, unit: '', price: 0, cost: 0, qty: 0, min: 0, location: '', active: true, lots: [] };
+
+const stockStatus = (i: Item) => (i.active === false ? 'Discontinued' : i.qty <= 0 ? 'Out' : isLowStock(i) ? 'Low' : 'OK');
 
 export default function Inventory() {
   const { db, saveItem, adjustStock, deleteItem } = useStore();
@@ -23,7 +25,7 @@ export default function Inventory() {
 
   const items = db.items.filter((i) => !cat || i.category === cat);
   const value = db.items.reduce((t, i) => t + Math.max(0, i.qty) * i.cost, 0);
-  const low = db.items.filter((i) => i.qty <= i.min).length;
+  const low = db.items.filter(isLowStock).length;
   const soon = new Date(); soon.setDate(soon.getDate() + db.settings.expiryAlertDays);
   const expLots = db.items.flatMap((i) => i.lots).filter((l) => l.expiry && new Date(l.expiry) <= soon).length;
   const name = (id: number) => db.items.find((i) => i.id === id)?.name ?? '';
@@ -31,12 +33,12 @@ export default function Inventory() {
   const cols: Column<Item>[] = [
     { key: 'name', label: 'Item', render: (i) => <div><p className="font-medium">{i.name}</p><p className="text-xs text-stone-500">{i.code}</p></div>, value: (i) => `${i.name} ${i.code}` },
     { key: 'category', label: 'Category', value: (i) => categoryLabel[i.category], render: (i) => <Badge tone={i.category === 'finished' ? 'wine' : 'gray'}>{categoryLabel[i.category]}</Badge> },
-    { key: 'qty', label: 'In stock', align: 'right', value: (i) => i.qty, render: (i) => <span className={i.qty <= i.min ? 'font-semibold text-red-600' : ''}>{num(i.qty, 2)} {i.unit}</span> },
+    { key: 'qty', label: 'In stock', align: 'right', value: (i) => i.qty, render: (i) => <span className={isLowStock(i) ? 'font-semibold text-red-600' : ''}>{num(i.qty, 2)} {i.unit}</span> },
     { key: 'min', label: 'Min', align: 'right', hideOnMobile: true, render: (i) => num(i.min) },
     { key: 'cost', label: 'Avg cost', align: 'right', render: (i) => ugx(i.cost), hideOnMobile: true },
     { key: 'value', label: 'Value', align: 'right', value: (i) => i.qty * i.cost, render: (i) => ugx(Math.max(0, i.qty) * i.cost) },
     { key: 'location', label: 'Location', hideOnMobile: true },
-    { key: 'st', label: 'Status', value: (i) => (i.qty <= i.min ? 'Low' : 'OK'), render: (i) => <Badge tone={i.qty <= 0 ? 'red' : i.qty <= i.min ? 'amber' : 'green'}>{i.qty <= 0 ? 'Out' : i.qty <= i.min ? 'Low' : 'OK'}</Badge> },
+    { key: 'st', label: 'Status', value: (i) => stockStatus(i), render: (i) => { const s = stockStatus(i); return <Badge tone={s === 'Discontinued' ? 'gray' : s === 'Out' ? 'red' : s === 'Low' ? 'amber' : 'green'}>{s}</Badge>; } },
   ];
   const mcols: Column<Movement>[] = [
     { key: 'date', label: 'Date', render: (m) => fmtDateTime(m.date) },
@@ -136,6 +138,12 @@ export default function Inventory() {
             <Field label="Minimum level"><Input type="number" value={edit.min} onChange={(e) => setEdit({ ...edit, min: Number(e.target.value) })} /></Field>
             {edit.category === 'finished' && <Field label="Selling price (UGX)"><Input type="number" value={edit.price} onChange={(e) => setEdit({ ...edit, price: Number(e.target.value) })} /></Field>}
             <Field label="Storage location"><Input value={edit.location} onChange={(e) => setEdit({ ...edit, location: e.target.value })} /></Field>
+            {!!edit.id && (
+              <label className="col-span-2 flex items-start gap-2.5 rounded-lg border border-stone-200 p-3 text-sm">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-wine-700" checked={edit.active === false} onChange={(e) => setEdit({ ...edit, active: !e.target.checked })} />
+                <span><b>Discontinued</b> — no longer stocked or replaced by another item. It keeps its history but stops showing in stock alerts and in the sale, purchase and production lists.</span>
+              </label>
+            )}
             {!edit.id && <>
               <Field label="Opening stock"><Input type="number" value={edit.qty} onChange={(e) => setEdit({ ...edit, qty: Number(e.target.value) })} /></Field>
               <Field label="Unit cost (UGX)"><Input type="number" value={edit.cost} onChange={(e) => setEdit({ ...edit, cost: Number(e.target.value) })} /></Field>

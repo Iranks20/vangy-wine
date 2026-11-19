@@ -1,5 +1,5 @@
 // The 20 business reports. Run on the server (GET /api/reports/:id) from MySQL records.
-import { batchCost, batchGoodUnits, cashbook, lineTotal, purchaseBalance, purchaseBilled, purchasePaid, purchaseTotal, saleBalance, saleCost, salePaid, saleTotal } from './calc';
+import { batchCost, batchGoodUnits, cashbook, isLowStock, lineTotal, purchaseBalance, purchaseBilled, purchasePaid, purchaseTotal, saleBalance, saleCost, salePaid, saleTotal } from './calc';
 import { categoryLabel, fmtDate, fmtDateTime, methodLabel, num } from './format';
 import type { Db } from './types';
 
@@ -46,7 +46,7 @@ export const REPORTS: Def[] = [
     return { columns: ['Date', 'Item', 'Movement', 'Qty', 'Source', 'By'], rows };
   } },
   { id: 'low', title: 'Low-stock report', group: 'Inventory', build: (db) => {
-    const rows = db.items.filter((i) => i.qty <= i.min).map((i) => [i.code, i.name, num(i.qty, 2), num(i.min), num(Math.max(0, i.min * 2 - i.qty)), i.unit]);
+    const rows = db.items.filter(isLowStock).map((i) => [i.code, i.name, num(i.qty, 2), num(i.min), num(Math.max(0, i.min * 2 - i.qty)), i.unit]);
     return { columns: ['Code', 'Item', 'In stock', 'Min level', 'Suggested reorder', 'Unit'], rows, note: 'Suggested reorder brings stock back to twice the minimum level.' };
   } },
   { id: 'expiry', title: 'Expiring and expired stock', group: 'Inventory', build: (db) => {

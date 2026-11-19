@@ -14,7 +14,7 @@ export async function loadItems(db: Conn, ids?: number[]): Promise<Item[]> {
   const lots = await lq;
   return rows.map((r) => ({
     id: r.id, code: r.code, name: r.name, category: r.category, unit: r.unit,
-    price: Number(r.price), cost: Number(r.cost), qty: Number(r.qty), min: Number(r.min_level), location: r.location,
+    price: Number(r.price), cost: Number(r.cost), qty: Number(r.qty), min: Number(r.min_level), location: r.location, active: r.active !== false,
     lots: lots.filter((l) => l.item_id === r.id).map((l) => ({ lotNo: l.lot_no, mfg: opt(l.mfg), expiry: opt(l.expiry), qty: Number(l.qty) })),
   }));
 }

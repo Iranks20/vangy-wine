@@ -13,7 +13,7 @@ const lineFor = (p: Item): Line => ({ itemId: p.id, qty: 1, price: p.price, disc
 
 export default function NewSale() {
   const { db } = useStore();
-  const products = db.items.filter((i) => i.category === 'finished');
+  const products = db.items.filter((i) => i.category === 'finished' && i.active !== false);
   // The form only mounts once something can be sold, so its first line always points at a real product.
   return products.length ? <SaleForm products={products} /> : <NoProducts />;
 }

@@ -1,5 +1,5 @@
 // Dashboard figures, calculated on the server (GET /api/dashboard) from the database records.
-import { batchGoodUnits, cashbook, purchaseTotal, saleBalance, saleCost, saleStatus, saleTotal } from './calc';
+import { batchGoodUnits, cashbook, isLowStock, purchaseTotal, saleBalance, saleCost, saleStatus, saleTotal } from './calc';
 import { dayOf } from './reports';
 import type { Db } from './types';
 
@@ -69,8 +69,8 @@ export function computeDashboard(db: Db, range: Range, from?: string, to?: strin
     grossProfit: gross, netProfit: gross - expTotal,
     stockValue: db.items.reduce((t, i) => t + Math.max(0, i.qty) * i.cost, 0),
     produced: db.batches.filter((b) => b.status === 'released' && b.bottlingDate && inRange(b.bottlingDate)).reduce((t, b) => t + batchGoodUnits(b), 0),
-    finished: db.items.filter((i) => i.category === 'finished').map((i) => ({ id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min, value: Math.max(0, i.qty) * i.cost })),
-    lowStock: db.items.filter((i) => i.qty <= i.min).map((i) => ({ id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min })),
+    finished: db.items.filter((i) => i.category === 'finished' && i.active !== false).map((i) => ({ id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min, value: Math.max(0, i.qty) * i.cost })),
+    lowStock: db.items.filter(isLowStock).map((i) => ({ id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min })),
     expiring,
     best: [...bestMap.values()].sort((a, b) => b.revenue - a.revenue),
     trend: [...trendMap.values()],

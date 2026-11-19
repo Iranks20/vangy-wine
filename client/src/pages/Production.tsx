@@ -37,8 +37,8 @@ export default function Production() {
   const { db, user, addBatch, updateBatch, addBatchMaterials, addStage, recordOutputs, setQc, releaseBatch, rejectBatch, saveRecipe, deleteRecipe } = useStore();
   const run = useRun();
   const toast = useToast();
-  const inputs = db.items.filter((i) => i.category !== 'finished');
-  const products = db.items.filter((i) => i.category === 'finished');
+  const inputs = db.items.filter((i) => i.category !== 'finished' && i.active !== false);
+  const products = db.items.filter((i) => i.category === 'finished' && i.active !== false);
   const name = (id: number) => db.items.find((i) => i.id === id)?.name ?? '';
   const unit = (id: number) => db.items.find((i) => i.id === id)?.unit ?? '';
 
