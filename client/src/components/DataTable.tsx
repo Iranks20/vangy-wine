@@ -67,12 +67,13 @@ export function DataTable<T>({ rows, columns, onRowClick, actions, pageSize = 12
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-2 border-b border-stone-100 p-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      {/* Phones: search on its own row, filters share the row below. Tablet and up: everything on one row. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 p-3 sm:flex-nowrap">
+        <div className="relative min-w-0 basis-full sm:basis-0 sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
           <input className="input pl-9" placeholder={searchPlaceholder} value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} aria-label="Search table" />
         </div>
-        {toolbar && <div className="flex flex-wrap gap-2">{toolbar}</div>}
+        {toolbar && <div className="flex min-w-0 flex-1 gap-2 *:min-w-0 *:flex-1 sm:flex-none sm:*:w-auto sm:*:flex-none">{toolbar}</div>}
       </div>
 
       {!shown.length ? <Empty title="Nothing to show" text={q ? 'No records match your search.' : emptyText} /> : (

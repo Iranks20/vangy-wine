@@ -11,6 +11,14 @@ import type { Item, ItemCategory, Movement } from '../lib/types';
 const blank: Item = { id: 0, code: '', name: '', category: '' as ItemCategory, unit: '', price: 0, cost: 0, qty: 0, min: 0, location: '', active: true, lots: [] };
 
 const stockStatus = (i: Item) => (i.active === false ? 'Discontinued' : i.qty <= 0 ? 'Out' : isLowStock(i) ? 'Low' : 'OK');
+type StatusFilter = 'instock' | 'all' | 'low' | 'out' | 'discontinued';
+const statusFilters: { id: StatusFilter; label: string; match: (i: Item) => boolean }[] = [
+  { id: 'instock', label: 'In stock', match: (i) => i.active !== false && i.qty > 0 },
+  { id: 'all', label: 'All statuses', match: () => true },
+  { id: 'low', label: 'Low stock', match: (i) => stockStatus(i) === 'Low' },
+  { id: 'out', label: 'Out of stock', match: (i) => stockStatus(i) === 'Out' },
+  { id: 'discontinued', label: 'Discontinued', match: (i) => i.active === false },
+];
 
 export default function Inventory() {
   const { db, saveItem, adjustStock, deleteItem } = useStore();
@@ -19,11 +27,16 @@ export default function Inventory() {
   const toast = useToast();
   const [tab, setTab] = useState<'items' | 'moves' | 'count'>('items');
   const [cat, setCat] = useState<'' | ItemCategory>('');
+  // Items with nothing in stock (and discontinued ones) are hidden until asked for.
+  const [status, setStatus] = useState<StatusFilter>('instock');
   const [edit, setEdit] = useState<Item | null>(null);
   const [view, setView] = useState<Item | null>(null);
   const [adj, setAdj] = useState<{ itemId: number; kind: 'increase' | 'decrease' | 'damage' | 'expired'; qty: string; reason: string } | null>(null);
 
-  const items = db.items.filter((i) => !cat || i.category === cat);
+  const inCat = db.items.filter((i) => !cat || i.category === cat);
+  const statusMatch = statusFilters.find((f) => f.id === status)!.match;
+  const items = inCat.filter(statusMatch);
+  const hidden = status === 'instock' ? inCat.length - items.length : 0;
   const value = db.items.reduce((t, i) => t + Math.max(0, i.qty) * i.cost, 0);
   const low = db.items.filter(isLowStock).length;
   const soon = new Date(); soon.setDate(soon.getDate() + db.settings.expiryAlertDays);
@@ -80,7 +93,16 @@ export default function Inventory() {
 
       {tab === 'items' && (
         <DataTable rows={items} columns={cols} actions={itemActions} onRowClick={setView}
-          toolbar={<Select value={cat} onChange={(e) => setCat(e.target.value as ItemCategory)} aria-label="Category"><option value="">All categories</option>{Object.entries(categoryLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>} />
+          toolbar={<>
+            <Select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Stock status">{statusFilters.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</Select>
+            <Select value={cat} onChange={(e) => setCat(e.target.value as ItemCategory)} aria-label="Category"><option value="">All categories</option>{Object.entries(categoryLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>
+          </>} />
+      )}
+      {tab === 'items' && hidden > 0 && (
+        <p className="mt-2 text-sm text-stone-500">
+          {hidden} item{hidden === 1 ? '' : 's'} with no stock {hidden === 1 ? 'is' : 'are'} hidden.{' '}
+          <button className="font-medium text-wine-700 hover:underline" onClick={() => setStatus('all')}>Show all</button>
+        </p>
       )}
       {tab === 'moves' && (
         <DataTable rows={db.movements} columns={mcols} actions={[{ label: 'View item', icon: Eye, onClick: (m) => setView(db.items.find((i) => i.id === m.itemId) ?? null) }]} searchPlaceholder="Search item, reference…"
